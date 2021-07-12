@@ -3,6 +3,7 @@ from io import BytesIO
 from os.path import basename
 from tkinter import filedialog, Tk
 from os import environ
+from platform import platform
 
 from appdirs import user_data_dir
 from twisted.logger import globalLogPublisher, LogLevel
@@ -11,6 +12,10 @@ path = user_data_dir("PenguChat")
 environ['KIVY_NO_ENV_CONFIG'] = '1'
 environ["KCFG_KIVY_LOG_LEVEL"] = "error"
 environ["KCFG_KIVY_LOG_DIR"] = path + '/PenguChat/Logs'
+
+OS = platform()
+if OS[0:OS.find('-')] == 'Windows':             # use DirectX for Windows, prevents some issues when using RDP
+    environ["KIVY_GL_BACKEND"] = "angle_sdl2"   # ( and is generally better for Win )s
 
 tkWindow = Tk()  # create a tkinter window, this is used for the native file dialogs
 tkWindow.withdraw()  # hide it for now
@@ -27,6 +32,7 @@ from kivy.config import Config
 from kivy.support import install_twisted_reactor
 from kivy.uix.popup import Popup
 from kivy.uix.textinput import TextInput
+from kivy.core.window import Window
 from pyDH import DiffieHellman
 from DBHandler import *
 
@@ -62,8 +68,11 @@ class PenguChatApp(App):  # this is the main KV app
 
     def __init__(self):  # set the window params, as well as init some parameters
         super(PenguChatApp, self).__init__()
-        Config.set('graphics', 'width', '500')
-        Config.set('graphics', 'height', '700')
+
+        self.window_size = ( int(8 / 10 * tkWindow.winfo_screenwidth()),
+                             int(8 / 10 * tkWindow.winfo_screenheight()))
+        Config.set('graphics', 'width', f'{self.window_size[0]}')
+        Config.set('graphics', 'height', f'{self.window_size[1]}')
         self.username = None
         self.destination = None
         self.private = None
@@ -88,7 +97,7 @@ class PenguChatApp(App):  # this is the main KV app
         self.root.ids.conversation.bind(minimum_height=self.root.ids.conversation.setter('height'))
         self.root.ids.request_button.tab = 'F'
         self.icon = 'Assets/circle-cropped.png'
-        reactor.connectTCP("localhost", 8123, self.factory)  # connect to the server
+        reactor.connectTCP("berrybox.local", 8123, self.factory)  # connect to the server
 
     """Server handshake, establish E2E tunnel for password exchange"""
 

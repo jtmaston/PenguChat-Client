@@ -197,7 +197,7 @@ ScreenManager:
 
 	Screen:
 		on_enter:
-			Window.size = (1080, 720)
+			Window.size = (app.window_size[0], app.window_size[1])
 			app.init_chat_room()
 
 		on_leave:
