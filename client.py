@@ -1,10 +1,16 @@
+import os
+import string
 import time
 from io import BytesIO
 from os.path import basename
+from random import choice
+from socket import socket
 from tkinter import filedialog, Tk
 from os import environ
 from platform import platform
+import threading
 
+import psutil
 from appdirs import user_data_dir
 from twisted.logger import globalLogPublisher, LogLevel
 
@@ -14,8 +20,8 @@ environ["KCFG_KIVY_LOG_LEVEL"] = "error"
 environ["KCFG_KIVY_LOG_DIR"] = path + '/PenguChat/Logs'
 
 OS = platform()
-if OS[0:OS.find('-')] == 'Windows':             # use DirectX for Windows, prevents some issues when using RDP
-    environ["KIVY_GL_BACKEND"] = "angle_sdl2"   # ( and is generally better for Win )s
+if OS[0:OS.find('-')] == 'Windows':  # use DirectX for Windows, prevents some issues when using RDP
+    environ["KIVY_GL_BACKEND"] = "angle_sdl2"  # ( and is generally better for Win )
 
 tkWindow = Tk()  # create a tkinter window, this is used for the native file dialogs
 tkWindow.withdraw()  # hide it for now
@@ -25,8 +31,8 @@ from builtins import IndexError
 from pickle import dumps as p_dumps
 from base64 import b64encode
 from json import dumps, loads
-from sys import modules
-from kivy.app import App
+from sys import modules, maxsize
+from kivymd.app import MDApp
 from kivy.clock import Clock
 from kivy.config import Config
 from kivy.support import install_twisted_reactor
@@ -41,20 +47,22 @@ if 'twisted.internet.reactor' in modules:
 install_twisted_reactor()  # integrate twisted with kivy
 
 from twisted.internet import reactor
-from twisted.internet.protocol import Protocol, connectionDone
+from twisted.internet.protocol import Protocol, connectionDone, DatagramProtocol
 from twisted.internet.protocol import ClientFactory as Factory
 from twisted.protocols.basic import FileSender
-#from twisted.python.log import startLogging
+from twisted.python.log import startLogging
 from twisted.internet.defer import Deferred
-#from sys import stdout
+from sys import stdout
 
-#startLogging(stdout)
+startLogging(stdout)
 
 from UIElements import *
 
+
 def analyze(event):
     if event.get("log_level") == LogLevel.critical:
-        print ("Stopping for: ", event)
+        print("Stopping for: ", event)
+
 
 class FauxMessage:
     def __init__(self):
@@ -63,21 +71,22 @@ class FauxMessage:
         self.sender = None
 
 
-class PenguChatApp(App):  # this is the main KV app
+class PenguChatApp(MDApp):  # this is the main KV app
     _popup: Popup
 
     def __init__(self):  # set the window params, as well as init some parameters
         super(PenguChatApp, self).__init__()
 
-        self.window_size = ( int(8 / 10 * tkWindow.winfo_screenwidth()),
-                             int(8 / 10 * tkWindow.winfo_screenheight()))
+        self.file_socket = socket()
+        self.window_size = (int(8 / 10 * tkWindow.winfo_screenwidth()),
+                            int(8 / 10 * tkWindow.winfo_screenheight()))
         Config.set('graphics', 'width', f'{self.window_size[0]}')
         Config.set('graphics', 'height', f'{self.window_size[1]}')
         self.username = None
         self.destination = None
-        self.private = None
+        self.__private = None
         self.factory = None
-        self.server_key = None
+        self.__server_key = None
         self.sidebar_refs = dict()
         self.conversation_refs = []
         self.friend_refs = []
@@ -102,8 +111,8 @@ class PenguChatApp(App):  # this is the main KV app
     """Server handshake, establish E2E tunnel for password exchange"""
 
     def secure(self):
-        self.private = DiffieHellman()  # private key is generated
-        public = self.private.gen_public_key()  # public key is derived from it
+        self.__private = DiffieHellman()  # private key is generated
+        public = self.__private.gen_public_key()  # public key is derived from it
         command_packet = {
             'command': 'secure',
             'key': public
@@ -117,7 +126,7 @@ class PenguChatApp(App):  # this is the main KV app
         pwd = self.root.ids.loginPass.text  # get username and password from the UI element
         self.username = self.root.ids.loginUsr.text
         try:  # this block is necessary to make sure that an E2E tunnel exists to the server
-            cipher = AES.new(str(self.server_key).encode(), AES.MODE_SIV)
+            cipher = AES.new(str(self.__server_key).encode(), AES.MODE_SIV)
         except AttributeError:  # if not, connection should be reset in order to get one
             self.factory.client.transport.loseConnection()
             self.fail_connection()
@@ -142,7 +151,7 @@ class PenguChatApp(App):  # this is the main KV app
         self.pwd = pwd
 
         if pwd == pwd_r:
-            cipher = AES.new(str(self.server_key).encode(), AES.MODE_SIV)
+            cipher = AES.new(str(self.__server_key).encode(), AES.MODE_SIV)
             encrypted, tag = cipher.encrypt_and_digest(pwd.encode())
             signup_packet = {
                 'command': 'signup',
@@ -163,17 +172,8 @@ class PenguChatApp(App):  # this is the main KV app
     def get_network_speed(*args, **kwargs):
         size = kwargs['size'] * (10 ** -6)
         delta = time.time() - kwargs['start']
-        print(f"Transfer speed is {int(size / delta * 100)/100 } MBps")
+        print(f"Transfer speed is {int(size / delta * 100) / 100} MBps")
         # print(size)
-
-    def send_file(self, sender, destination, timestamp):
-        blob = get_file_for_message(sender, destination, timestamp)
-        blob = BytesIO(blob)
-        sender = FileSender()
-        sender.CHUNK_SIZE = 2 ** 16
-        start_time = time.time()
-        d = sender.beginFileTransfer(blob, self.factory.client.transport)
-        #d.addCallback(self.get_network_speed, start=start_time, size=blob.getbuffer().nbytes)
 
     def send_text(self):
         message_text = self.root.ids.message_content.text
@@ -199,7 +199,65 @@ class PenguChatApp(App):  # this is the main KV app
         self.factory.client.transport.write((dumps(packet) + '\r\n').encode())
         # print(f" <- {dumps(packet).encode()}")
 
-    def attach_file(self):  # function for attaching and then sending file
+    @staticmethod
+    def foo(filename):
+        sock = socket()
+        sock.bind(("localhost", 0))
+        sock.listen()
+        print(filename)
+        print(sock)
+
+        client_socket, addr = sock.accept()
+        print(f"Started connection with {addr}")
+        with open(f'.cache/{filename}', 'rb') as f:
+            client_socket.sendfile(f, 0)
+        client_socket.close()
+        sock.close()
+        return
+
+    def attach_file(self):
+        self.file = filedialog.askopenfile(mode="rb")
+        tkWindow.update()
+        self.hide_tk()
+
+        if self.file:
+            # Get file size, to make sure we *can* load it to RAM
+            self.file.seek(0, os.SEEK_END)
+            file_size = self.file.tell()
+            available_ram = psutil.virtual_memory().available - 1000000000  # check if file can fit into memory
+            # if not, just yeet everything
+            if file_size > available_ram:
+                raise MemoryError
+            self.file.seek(0, 0)
+
+            # Encrypt the file, alongside its name. Then store with a random identifier
+            data = self.file.read()
+            filename = basename(self.file.name)
+            cipher = AES.new(get_common_key(self.destination, self.username), AES.MODE_SIV)
+            data = p_dumps({'filename': filename, 'file_blob': data})
+            blob = p_dumps(cipher.encrypt_and_digest(data)) + '\r\n'.encode()
+            blob = b64encode(blob).decode()
+            local_filename = ''.join(choice(string.ascii_letters) for i in range(16))  # get a random filename
+            try:
+                with open(f".cache/{local_filename}", "w+") as f:
+                    f.write(blob)
+            except FileNotFoundError:
+                makedirs(".cache")
+                with open(f".cache/{local_filename}", "w+") as f:
+                    f.write(blob)
+
+            threading.Thread(target=self.foo, args=(local_filename,)).start()
+
+            packet = {  # metadata
+                'sender': self.username,
+                'destination': self.destination,
+                'command': 'prepare_for_file',
+                'timestamp': datetime.now().strftime("%m/%d/%Y, %H:%M:%S"),
+                'file_size': file_size,
+                'filename': local_filename
+            }
+
+    """def attach_file(self):  # function for attaching and then sending file
         file = filedialog.askopenfile(mode="rb")
         tkWindow.update()
         self.hide_tk()
@@ -223,6 +281,7 @@ class PenguChatApp(App):  # this is the main KV app
                 'isfile': True,
                 'filename': encrypted_name
             }
+            
             save_message(packet, self.username, filename=basename(file.name))
             packet['content'] = ""
             packet['isfile'] = None
@@ -238,7 +297,21 @@ class PenguChatApp(App):  # this is the main KV app
             application.root.ids['attach_button'].disabled = True
             self.root.ids['message_content'].disabled = True
             self.factory.client.transport.write((dumps(packet) + '\r\n').encode())
-            # print(f" <- {dumps(packet).encode()}")
+            # print(f" <- {dumps(packet).encode()}")"""
+
+    def send_file(self, sender, destination, timestamp):
+        blob = get_file_for_message(sender, destination, timestamp)
+        blob = BytesIO(blob)
+        sender = FileSender()
+
+        if maxsize > 2 ** 32:
+            sender.CHUNK_SIZE = 2 ** 32
+        else:
+            sender.CHUNK_SIZE = 2 ** 16
+
+        start_time = time.time()
+        d = sender.beginFileTransfer(blob, self.factory.client.transport)
+        # d.addCallback(self.get_network_speed, start=start_time, size=blob.getbuffer().nbytes)
 
     """Helper methods"""
 
@@ -254,7 +327,7 @@ class PenguChatApp(App):  # this is the main KV app
             pass
 
     def secure_server(self, command):  # part of the initial E2E
-        self.server_key = self.private.gen_shared_key(command['content'])
+        self.__server_key = self.__private.gen_shared_key(command['content'])
         self.root.current = 'login'
 
     def login_ok(self):  # called when login succeeds, changes to the chatroom screen
@@ -289,7 +362,7 @@ class PenguChatApp(App):  # this is the main KV app
         pwd = self.pwd  # after the server verifies that the user was correctly registered, also log
         # him in.
         try:
-            cipher = AES.new(str(self.server_key).encode(), AES.MODE_SIV)
+            cipher = AES.new(str(self.__server_key).encode(), AES.MODE_SIV)
         except AttributeError:
             self.factory.client.transport.loseConnection()
             self.fail_connection()
@@ -309,7 +382,7 @@ class PenguChatApp(App):  # this is the main KV app
 
     def got_friend_key(self, command):  # called when a common key is established with a partner, after the req.
         add_common_key(command['friend'],
-                       self.private.gen_shared_key(command['content']),
+                       self.__private.gen_shared_key(command['content']),
                        self.username)
 
     def username_taken(self):  # called to change the screen to an errored state
@@ -349,11 +422,11 @@ class PenguChatApp(App):  # this is the main KV app
     def new_chat(self):  # called when sending a chat request
 
         def send_chat_request(text_object):  # save the private key to be used later
-            add_private_key(text_box.text, self.private.get_private_key(), self.username)
+            add_private_key(text_box.text, self.__private.get_private_key(), self.username)
             packet = {
                 'sender': self.username,
                 'command': 'friend_request',
-                'content': self.private.gen_public_key(),
+                'content': self.__private.gen_public_key(),
                 'destination': text_box.text,
                 'timestamp': datetime.now().strftime("%m/%d/%Y, %H:%M:%S"),
                 'isfile': False
@@ -386,14 +459,14 @@ class PenguChatApp(App):  # this is the main KV app
     def accept_request(self, button_object):  # called when accepting the request
         friend = button_object.parent.parent.username  # Must move up two boxes, first parent is ver box second is hor
         friend_key = int(get_key_for_request(self.username, friend).decode())
-        common_key = self.private.gen_shared_key(friend_key)
+        common_key = self.__private.gen_shared_key(friend_key)
         add_common_key(friend, common_key, self.username)  # add the common key to the database
         self.root.ids.sidebar.remove_widget(button_object.parent)  # remove the request entry in the sidebar
         delete_request(friend)  # also delete the request from the db
         packet = {
             'sender': self.username,
             'command': 'friend_accept',
-            'content': self.private.gen_public_key(),
+            'content': self.__private.gen_public_key(),
             'destination': friend,
             'timestamp': datetime.now().strftime("%m/%d/%Y, %H:%M:%S"),
             'isfile': False
@@ -635,7 +708,7 @@ class Client(Protocol):  # defines the communications protocol
 
     def dataReceived(self, data):  # called when a packet is received.
         if not self.receiving_file:
-            #print(f" -> {data}")       # uncomment this line to get the raw packet data
+            # print(f" -> {data}")       # uncomment this line to get the raw packet data
             data = data.decode().split('}')
             for packet in data:
                 if packet:
