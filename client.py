@@ -2,6 +2,7 @@ import os
 import string
 import time
 from io import BytesIO
+from math import floor
 from os.path import basename
 from random import choice
 from socket import socket
@@ -15,9 +16,6 @@ from appdirs import user_data_dir
 from twisted.logger import globalLogPublisher, LogLevel
 
 path = user_data_dir("PenguChat")
-environ['KIVY_NO_ENV_CONFIG'] = '1'
-environ["KCFG_KIVY_LOG_LEVEL"] = "error"
-environ["KCFG_KIVY_LOG_DIR"] = path + '/PenguChat/Logs'
 
 OS = platform()
 if OS[0:OS.find('-')] == 'Windows':  # use DirectX for Windows, prevents some issues when using RDP
@@ -64,6 +62,9 @@ def analyze(event):
         print("Stopping for: ", event)
 
 
+running = True
+
+
 class FauxMessage:
     def __init__(self):
         self.isfile = None
@@ -92,6 +93,13 @@ class PenguChatApp(MDApp):  # this is the main KV app
         self.friend_refs = []
         self.pwd = None
         self.incoming = {}
+        self.running = True
+
+    def stop(self, *args):
+        global running
+        running = False
+        print("asking to stop")
+        return True
 
     """App loading section"""
 
@@ -106,7 +114,9 @@ class PenguChatApp(MDApp):  # this is the main KV app
         self.root.ids.conversation.bind(minimum_height=self.root.ids.conversation.setter('height'))
         self.root.ids.request_button.tab = 'F'
         self.icon = 'Assets/circle-cropped.png'
-        reactor.connectTCP("berrybox.local", 8123, self.factory)  # connect to the server
+        # reactor.connectTCP("berrybox.local", 8123, self.factory)  # connect to the server
+        # reactor.connectTCP("192.168.137.138", 8123, self.factory)  # connect to the server
+        reactor.connectTCP("localhost", 8123, self.factory)  # connect to the server
 
     """Server handshake, establish E2E tunnel for password exchange"""
 
@@ -200,19 +210,28 @@ class PenguChatApp(MDApp):  # this is the main KV app
         # print(f" <- {dumps(packet).encode()}")
 
     @staticmethod
-    def foo(filename):
-        sock = socket()
-        sock.bind(("localhost", 0))
+    def foo(filename, sock, file_size):
+        global running
+        print("listening")
         sock.listen()
-        print(filename)
-        print(sock)
-
-        client_socket, addr = sock.accept()
-        print(f"Started connection with {addr}")
-        with open(f'.cache/{filename}', 'rb') as f:
-            client_socket.sendfile(f, 0)
-        client_socket.close()
-        sock.close()
+        sock.setblocking(False)
+        while running:
+            print(running)
+            try:
+                client_socket, addr = sock.accept()
+            except BlockingIOError:
+                pass
+            else:
+                print(f"Started connection with {addr}")
+                start = time.time()
+                with open(f'.cache/{filename}', 'rb') as f:
+                    client_socket.sendfile(f, 0)
+                client_socket.close()
+                sock.close()
+                end = time.time()
+                print("Connection done.")
+                print(f"Transfer rate is {floor(file_size / 1000000 / (end - start + 0.01) * 8)} mbps")
+                return
         return
 
     def attach_file(self):
@@ -224,10 +243,11 @@ class PenguChatApp(MDApp):  # this is the main KV app
             # Get file size, to make sure we *can* load it to RAM
             self.file.seek(0, os.SEEK_END)
             file_size = self.file.tell()
-            available_ram = psutil.virtual_memory().available - 1000000000  # check if file can fit into memory
-            # if not, just yeet everything
-            if file_size > available_ram:
-                raise MemoryError
+
+            # if file_size > 700000000:       # for now, limit is hard because of the raspi server, but
+            #    raise MemoryError           # *should* get some negotiation working.
+            # NOTE : New server code *should* handle any filesize. Hopefully.
+
             self.file.seek(0, 0)
 
             # Encrypt the file, alongside its name. Then store with a random identifier
@@ -235,8 +255,8 @@ class PenguChatApp(MDApp):  # this is the main KV app
             filename = basename(self.file.name)
             cipher = AES.new(get_common_key(self.destination, self.username), AES.MODE_SIV)
             data = p_dumps({'filename': filename, 'file_blob': data})
-            blob = p_dumps(cipher.encrypt_and_digest(data)) + '\r\n'.encode()
-            blob = b64encode(blob).decode()
+            blob = p_dumps(cipher.encrypt_and_digest(data)) + '\r\n'.encode()  # TODO: get this on another thread,
+            blob = b64encode(blob).decode()  # cause it hangs otherwise
             local_filename = ''.join(choice(string.ascii_letters) for i in range(16))  # get a random filename
             try:
                 with open(f".cache/{local_filename}", "w+") as f:
@@ -246,7 +266,9 @@ class PenguChatApp(MDApp):  # this is the main KV app
                 with open(f".cache/{local_filename}", "w+") as f:
                     f.write(blob)
 
-            threading.Thread(target=self.foo, args=(local_filename,)).start()
+            sock = socket()
+            sock.bind(("localhost", 0))
+            threading.Thread(target=self.foo, args=(local_filename, sock, file_size)).start()
 
             packet = {  # metadata
                 'sender': self.username,
@@ -254,8 +276,11 @@ class PenguChatApp(MDApp):  # this is the main KV app
                 'command': 'prepare_for_file',
                 'timestamp': datetime.now().strftime("%m/%d/%Y, %H:%M:%S"),
                 'file_size': file_size,
-                'filename': local_filename
+                'filename': local_filename,
+                'port': sock.getsockname()[1]
             }
+
+            self.factory.client.transport.write((dumps(packet) + '\r\n').encode())
 
     """def attach_file(self):  # function for attaching and then sending file
         file = filedialog.askopenfile(mode="rb")
