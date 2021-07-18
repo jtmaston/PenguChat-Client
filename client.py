@@ -66,6 +66,7 @@ def analyze(event):
 running = True
 server_address = 'localhost'
 
+
 class FauxMessage:
     def __init__(self):
         self.isfile = None
@@ -116,7 +117,7 @@ class PenguChatApp(MDApp):  # this is the main KV app
         self.root.ids.request_button.tab = 'F'
         self.icon = 'Assets/circle-cropped.png'
         global server_address
-        #reactor.connectTCP("berrybox.local", 8123, self.factory)  # connect to the server
+        # reactor.connectTCP("berrybox.local", 8123, self.factory)  # connect to the server
         # reactor.connectTCP("192.168.137.138", 8123, self.factory)  # connect to the server
         reactor.connectTCP(server_address, 8123, self.factory)  # connect to the server
 
@@ -180,13 +181,6 @@ class PenguChatApp(MDApp):  # this is the main KV app
         self.root.current = 'loading_screen'
         self.init_chat_room()  # called to clear the chat room, in anticipation of a new one being loaded
 
-    @staticmethod
-    def get_network_speed(*args, **kwargs):
-        size = kwargs['size'] * (10 ** -6)
-        delta = time.time() - kwargs['start']
-        print(f"Transfer speed is {int(size / delta * 100) / 100} MBps")
-        # print(size)
-
     def send_text(self):
         message_text = self.root.ids.message_content.text
         self.root.ids.message_content.text = ""  # clear the message box's contents
@@ -212,9 +206,25 @@ class PenguChatApp(MDApp):  # this is the main KV app
         # print(f" <- {dumps(packet).encode()}")
 
     @staticmethod
-    def sender_daemon(filename, sock, file_size):
+    def sender_daemon(file, file_size, destination, username, sock):
+        print("Started sender Daemon.")
+        data = file.read()
+        filename = basename(file.name)
+        cipher = AES.new(get_common_key(destination, username), AES.MODE_SIV)
+        data = p_dumps({'filename': filename, 'file_blob': data})
+        blob = p_dumps(cipher.encrypt_and_digest(data)) + '\r\n'.encode()
+        blob = b64encode(blob)
+        local_filename = ''.join(choice(string.ascii_letters) for i in range(16))  # get a random filename
+        # try:  # TODO: Phase this out
+        #    with open(f"{data_directory}/cache/{local_filename}", "wb+") as f:
+        #        f.write(blob)
+        # except FileNotFoundError:
+        #   makedirs(f"{data_directory}/cache")
+        #    with open(f"{data_directory}/cache/{local_filename}", "wb+") as f:
+        #        f.write(blob)
+
         global running
-        print("listening")
+        print("Encryption done. Listening.")
         sock.listen()
         sock.setblocking(False)
 
@@ -227,8 +237,9 @@ class PenguChatApp(MDApp):  # this is the main KV app
             else:
                 print(f"Started connection with {addr}")
                 start = time.time()
-                with open(f'{data_directory}/cache/{filename}', 'rb') as f:
-                    client_socket.sendfile(f, 0)
+                # with open(f'{data_directory}/cache/{local_filename}', 'rb') as f:
+                #    client_socket.sendfile(f, 0)
+                client_socket.sendall(blob)
                 client_socket.close()
                 sock.close()
                 end = time.time()
@@ -238,41 +249,27 @@ class PenguChatApp(MDApp):  # this is the main KV app
         return
 
     def send_file(self):
-        self.file = filedialog.askopenfile(mode="rb")
+        file = filedialog.askopenfile(mode="rb")
         tkWindow.update()
         self.hide_tk()
 
-        if self.file:
+        if file:
             # Get file size, to make sure we *can* load it to RAM
-            self.file.seek(0, os.SEEK_END)
-            file_size = self.file.tell()
-
-            self.file.seek(0, 0)
+            file.seek(0, os.SEEK_END)
+            file_size = file.tell()
+            file.seek(0, 0)
 
             # Encrypt the file, alongside its name. Then store with a random identifier
-            data = self.file.read()
-            filename = basename(self.file.name)
-            cipher = AES.new(get_common_key(self.destination, self.username), AES.MODE_SIV)
-            data = p_dumps({'filename': filename, 'file_blob': data})
-            blob = p_dumps(cipher.encrypt_and_digest(data)) + '\r\n'.encode()
-            blob = b64encode(blob).decode()
+            filename = basename(file.name)
 
             cipher = AES.new(get_common_key(self.destination, self.username), AES.MODE_SIV)
             out_filename = p_dumps(cipher.encrypt_and_digest(filename.encode())) + '\r\n'.encode()
             out_filename = b64encode(out_filename).decode()
 
-            local_filename = ''.join(choice(string. ascii_letters) for i in range(16))  # get a random filename
-            try:
-                with open(f"{data_directory}/cache/{local_filename}", "w+") as f:
-                    f.write(blob)
-            except FileNotFoundError:
-                makedirs(f"{data_directory}/cache")
-                with open(f"{data_directory}/cache/{local_filename}", "w+") as f:
-                    f.write(blob)
-
             sock = socket()
             sock.bind(("0.0.0.0", 0))
-            threading.Thread(target=self.sender_daemon, args=(local_filename, sock, file_size)).start()
+            threading.Thread(target=self.sender_daemon,
+                             args=(file, file_size, self.destination, self.username, sock)).start()
 
             packet = {  # metadata
                 'sender': self.username,
@@ -308,6 +305,7 @@ class PenguChatApp(MDApp):  # this is the main KV app
 
         chunk = sock.recv(chunk_size)
         while chunk:
+            # print(chunk)
             file.write(chunk)
             chunk = sock.recv(chunk_size)
 
@@ -335,7 +333,6 @@ class PenguChatApp(MDApp):  # this is the main KV app
 
         application.add_bubble_to_conversation(f, self.incoming['sender'])
         # print("ingest complete")
-
 
     """Helper methods"""
 
@@ -697,7 +694,6 @@ class PenguChatApp(MDApp):  # this is the main KV app
         self.root.current = 'login'
 
 
-
 class Client(Protocol):  # defines the communications protocol
     def __init__(self):
         self.username = None
@@ -709,7 +705,7 @@ class Client(Protocol):  # defines the communications protocol
         application.succeed_connection()
 
     def dataReceived(self, data):  # called when a packet is received.
-        print(f" -> {data}")       # uncomment this line to get the raw packet data
+        print(f" -> {data}")  # uncomment this line to get the raw packet data
         data = data.decode().split('}')
         for packet in data:
             if packet:
@@ -739,7 +735,7 @@ class Client(Protocol):  # defines the communications protocol
                     f.sender = command['sender']
                     application.add_bubble_to_conversation(f, command['sender'])
                 elif command['command'] == 'prepare_for_file':
-                   application.receiver_daemon(command)
+                    threading.Thread(target=application.receiver_daemon, args=(command,)).start()
                 elif command['command'] == 'file_received':
                     application.conversation_refs[-1].switch_mode()
                     application.root.ids['send_button'].disabled = False
