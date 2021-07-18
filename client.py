@@ -136,8 +136,8 @@ class PenguChatApp(MDApp):  # this is the main KV app
     """Methods that send data to server"""
 
     def send_login_data(self):
-        pwd = self.root.ids.loginPass.text  # get username and password from the UI element
-        self.username = self.root.ids.loginUsr.text
+        pwd = self.root.ids.loginPass.text.strip()  # get username and password from the UI element
+        self.username = self.root.ids.loginUsr.text.strip()
         try:  # this block is necessary to make sure that an E2E tunnel exists to the server
             cipher = AES.new(str(self.__server_key).encode(), AES.MODE_SIV)
         except AttributeError:  # if not, connection should be reset in order to get one
@@ -157,9 +157,9 @@ class PenguChatApp(MDApp):  # this is the main KV app
         # print(f" <- {dumps(login_packet).encode()}")
 
     def send_sign_up_data(self):  # see above method, it's that but with extra steps
-        pwd = self.root.ids.passwd.text
-        pwd_r = self.root.ids.passwd_r.text
-        self.username = self.root.ids.username.text
+        pwd = self.root.ids.passwd.text.strip()
+        pwd_r = self.root.ids.passwd_r.text.strip()
+        self.username = self.root.ids.username.text.strip()
 
         self.pwd = pwd
 
@@ -380,7 +380,7 @@ class PenguChatApp(MDApp):  # this is the main KV app
                                                              len(screen.children[0].children) - 1])
                 screen.has_error = False
 
-        pwd = self.pwd  # after the server verifies that the user was correctly registered, also log
+        pwd = self.pwd.strip()  # after the server verifies that the user was correctly registered, also log
         # him in.
         try:
             cipher = AES.new(str(self.__server_key).encode(), AES.MODE_SIV)
@@ -393,7 +393,7 @@ class PenguChatApp(MDApp):  # this is the main KV app
             'command': 'login',
             'password': b64encode(encrypted).decode(),
             'tag': b64encode(tag).decode(),
-            'sender': self.username,
+            'sender': self.username.strip(),
             'isfile': False
         }
         self.root.current = 'loading_screen'
