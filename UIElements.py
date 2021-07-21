@@ -29,15 +29,28 @@ from pickle import loads as p_loads
 
 # houses the UI elements that couldn't be defined in the KV
 
-colors = {
+colors_rgb = {
     'red': (1, 0, 0),
     'gray': (0.4, 0.4, 0.4),
     'menu_blue': (0, 0.413, 0.586),
     'menu_light_blue': (0.096, 0.535, 0.656),
     'outgoing_message': (0.096, 0.535, 0.656),
-    'incoming_message': (0, 0.213, 0.28)
+    'incoming_message': (0, 0.213, 0.28),
 }
 
+colors_hex = {
+    'red': '#ff0000',
+    'gray': '#666666',
+    'menu_blue': '#006995',
+    'menu_light_blue': '#1888a7',
+    'outgoing_message': '#1888a7',
+    'incoming_message': '#003647',
+    'beak_orange': '#ff9f1e',
+    'gray_body': '44525b'
+}
+
+
+# '#%02x%02x%02x' % (0, 128, 64)
 
 class MenuButton(Button):
     pass
@@ -65,7 +78,7 @@ class ColoredLabel(Label):
         super(ColoredLabel, self).__init__(**kwargs)
         with self.canvas.before:
             self.background_color = Color()
-            self.background_color.rgb = colors[color]
+            self.background_color.rgb = colors_rgb[color]
             self.rect = Rectangle(pos=self.pos, size=self.size)
         self.bind(pos=self.update_rect, size=self.update_rect)
 
@@ -104,11 +117,10 @@ class FileBubble(Button):
             text = text[0:3] + "..." + text[text.rfind("."):]
         with self.canvas.before:
             self.bc = Color()
-            self.bc.rgb = colors['incoming_message'] if side == 'l' else colors['outgoing_message']
+            self.bc.rgb = colors_rgb['incoming_message'] if side == 'l' else colors_rgb['outgoing_message']
             self.rect = RoundedRectangle(pos=self.pos, size=(150, 150))
             self.rect.radius = [(15, 15), (15, 15), (15, 15), (15, 15)]
             self.side = side
-
 
             self.text = f'\n\n\n{text}'
             self.truncated = truncated
@@ -205,13 +217,13 @@ class ConversationElement:
         if side == 'l':
             self.left = MessageBubble(text=text, side=side) if not isfile \
                 else FileBubble(side=side, text=filename, truncated=truncated)
-            self.left.background_color.rgb = colors['incoming_message']
+            self.left.background_color.rgb = colors_rgb['incoming_message']
             self.right = EmptyWidget()
             self.reload = self.left.update_rect
         else:
             self.right = MessageBubble(text=text, side=side) if not isfile \
                 else FileBubble(side=side, text=filename, truncated=truncated)
-            self.right.background_color.rgb = colors['outgoing_message']
+            self.right.background_color.rgb = colors_rgb['outgoing_message']
             self.left = EmptyWidget()
             self.reload = self.right.update_rect
 
