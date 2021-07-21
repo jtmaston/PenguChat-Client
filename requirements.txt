@@ -1,9 +1,0 @@
-pyDH
-Twisted
-peewee
-bcrypt
-kivy[base]
-pycryptodome
-appdirs
-matplotlib<3.3.0
-numpy

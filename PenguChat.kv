@@ -197,7 +197,7 @@ ScreenManager:
 
 	Screen:
 		on_enter:
-			Window.size = (app.window_size[0], app.window_size[1])
+			Window.size = (1080, 720)
 			app.init_chat_room()
 
 		on_leave:
@@ -311,7 +311,7 @@ ScreenManager:
                                 pos: self.parent.pos
                         MenuButton:
                             id: attach_button
-                            on_press: app.send_file()
+                            on_press: app.attach_file()
                             size_hint: (0.15, 1)
                             Image:
                                 source: 'Assets/attach.png'
