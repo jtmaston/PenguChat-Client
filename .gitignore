@@ -1,0 +1,6 @@
+venv
+.idea
+filetransfertest
+.cache
+Test files
+__pycache__
