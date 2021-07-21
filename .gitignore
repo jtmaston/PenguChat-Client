@@ -1,6 +1,8 @@
 venv
 .idea
 filetransfertest
+voiptest
 .cache
 Test files
 __pycache__
+*.xcf

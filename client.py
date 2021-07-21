@@ -1,26 +1,39 @@
 import base64
+
+from kivy.config import Config
+Config.set('graphics', 'width', '500')
+Config.set('graphics', 'height', '750')
+
 import os
+from platform import platform
+OS = platform()
+if OS[0:OS.find('-')] == 'Windows':  # use DirectX for Windows, prevents some issues when using RDP
+    os.environ["KIVY_GL_BACKEND"] = "angle_sdl2"  # ( and is generally better for Win )
 import string
 import time
 from io import BytesIO
 from math import floor
 from os.path import basename
 from random import choice
-from socket import socket
+from socket import socket, AF_INET, SOCK_STREAM
 from tkinter import filedialog, Tk
-from os import environ
-from platform import platform
+
+
 import threading
 
+
+from kivy.uix.screenmanager import RiseInTransition, FadeTransition
+from kivymd.uix.banner import MDBanner
+
+
+import kivy.clock
 import psutil
+import pyaudio
 from appdirs import user_data_dir
+from kivy.core.audio import SoundLoader
 from twisted.logger import globalLogPublisher, LogLevel
 
 data_directory = user_data_dir("PenguChat")
-
-OS = platform()
-if OS[0:OS.find('-')] == 'Windows':  # use DirectX for Windows, prevents some issues when using RDP
-    environ["KIVY_GL_BACKEND"] = "angle_sdl2"  # ( and is generally better for Win )
 
 tkWindow = Tk()  # create a tkinter window, this is used for the native file dialogs
 tkWindow.withdraw()  # hide it for now
@@ -33,14 +46,13 @@ from json import dumps, loads
 from sys import modules, maxsize
 from kivymd.app import MDApp
 from kivy.clock import Clock
-from kivy.config import Config
 from kivy.support import install_twisted_reactor
 from kivy.uix.popup import Popup
 from kivy.uix.textinput import TextInput
 from kivy.core.window import Window
 from pyDH import DiffieHellman
 from DBHandler import *
-
+Clock.max_iteration = 20
 if 'twisted.internet.reactor' in modules:
     del modules['twisted.internet.reactor']
 install_twisted_reactor()  # integrate twisted with kivy
@@ -66,6 +78,7 @@ def analyze(event):
 running = True
 server_address = 'localhost'
 
+
 class FauxMessage:
     def __init__(self):
         self.isfile = None
@@ -79,11 +92,13 @@ class PenguChatApp(MDApp):  # this is the main KV app
     def __init__(self):  # set the window params, as well as init some parameters
         super(PenguChatApp, self).__init__()
 
+        Config.set('graphics', 'width', f'{500}')
+        Config.set('graphics', 'height', f'{750}')
+        self.calling = False
         self.file_socket = socket()
         self.window_size = (int(8 / 10 * tkWindow.winfo_screenwidth()),
                             int(8 / 10 * tkWindow.winfo_screenheight()))
-        Config.set('graphics', 'width', f'{self.window_size[0]}')
-        Config.set('graphics', 'height', f'{self.window_size[1]}')
+
         self.username = None
         self.destination = None
         self.__private = None
@@ -95,6 +110,7 @@ class PenguChatApp(MDApp):  # this is the main KV app
         self.pwd = None
         self.incoming = {}
         self.running = True
+        self.sound_manager = None
 
     def stop(self, *args):
         global running
@@ -116,9 +132,11 @@ class PenguChatApp(MDApp):  # this is the main KV app
         self.root.ids.request_button.tab = 'F'
         self.icon = 'Assets/circle-cropped.png'
         global server_address
-        #reactor.connectTCP("berrybox.local", 8123, self.factory)  # connect to the server
+        # reactor.connectTCP("berrybox.local", 8123, self.factory)  # connect to the server
         # reactor.connectTCP("192.168.137.138", 8123, self.factory)  # connect to the server
         reactor.connectTCP(server_address, 8123, self.factory)  # connect to the server
+
+        self.theme_cls.colors = dict(self.theme_cls.colors, **colors_hex)
 
     """Server handshake, establish E2E tunnel for password exchange"""
 
@@ -135,8 +153,8 @@ class PenguChatApp(MDApp):  # this is the main KV app
     """Methods that send data to server"""
 
     def send_login_data(self):
-        pwd = self.root.ids.loginPass.text  # get username and password from the UI element
-        self.username = self.root.ids.loginUsr.text
+        pwd = self.root.ids.loginPass.text.strip()  # get username and password from the UI element
+        self.username = self.root.ids.loginUsr.text.strip()
         try:  # this block is necessary to make sure that an E2E tunnel exists to the server
             cipher = AES.new(str(self.__server_key).encode(), AES.MODE_SIV)
         except AttributeError:  # if not, connection should be reset in order to get one
@@ -152,13 +170,14 @@ class PenguChatApp(MDApp):  # this is the main KV app
             'isfile': False
         }
         self.root.current = 'loading_screen'
+        self.root.transition = FadeTransition()
         self.factory.client.transport.write((dumps(login_packet) + '\r\n').encode())  # finally, send it
         # print(f" <- {dumps(login_packet).encode()}")
 
     def send_sign_up_data(self):  # see above method, it's that but with extra steps
-        pwd = self.root.ids.passwd.text
-        pwd_r = self.root.ids.passwd_r.text
-        self.username = self.root.ids.username.text
+        pwd = self.root.ids.passwd.text.strip()
+        pwd_r = self.root.ids.passwd_r.text.strip()
+        self.username = self.root.ids.username.text.strip()
 
         self.pwd = pwd
 
@@ -179,13 +198,6 @@ class PenguChatApp(MDApp):  # this is the main KV app
         self.factory.client.transport.loseConnection()
         self.root.current = 'loading_screen'
         self.init_chat_room()  # called to clear the chat room, in anticipation of a new one being loaded
-
-    @staticmethod
-    def get_network_speed(*args, **kwargs):
-        size = kwargs['size'] * (10 ** -6)
-        delta = time.time() - kwargs['start']
-        print(f"Transfer speed is {int(size / delta * 100) / 100} MBps")
-        # print(size)
 
     def send_text(self):
         message_text = self.root.ids.message_content.text
@@ -212,9 +224,17 @@ class PenguChatApp(MDApp):  # this is the main KV app
         # print(f" <- {dumps(packet).encode()}")
 
     @staticmethod
-    def sender_daemon(filename, sock, file_size):
+    def sender_daemon(file, file_size, destination, username, sock):
+        print("Started sender Daemon.")
+        data = file.read()
+        filename = basename(file.name)
+        cipher = AES.new(get_common_key(destination, username), AES.MODE_SIV)
+        data = p_dumps({'filename': filename, 'file_blob': data})
+        blob = p_dumps(cipher.encrypt_and_digest(data)) + '\r\n'.encode()
+        blob = b64encode(blob)
+
         global running
-        print("listening")
+        print("Encryption done. Listening.")
         sock.listen()
         sock.setblocking(False)
 
@@ -227,8 +247,9 @@ class PenguChatApp(MDApp):  # this is the main KV app
             else:
                 print(f"Started connection with {addr}")
                 start = time.time()
-                with open(f'{data_directory}/cache/{filename}', 'rb') as f:
-                    client_socket.sendfile(f, 0)
+                # with open(f'{data_directory}/cache/{local_filename}', 'rb') as f:
+                #    client_socket.sendfile(f, 0)
+                client_socket.sendall(blob)
                 client_socket.close()
                 sock.close()
                 end = time.time()
@@ -238,41 +259,27 @@ class PenguChatApp(MDApp):  # this is the main KV app
         return
 
     def send_file(self):
-        self.file = filedialog.askopenfile(mode="rb")
+        file = filedialog.askopenfile(mode="rb")
         tkWindow.update()
         self.hide_tk()
 
-        if self.file:
+        if file:
             # Get file size, to make sure we *can* load it to RAM
-            self.file.seek(0, os.SEEK_END)
-            file_size = self.file.tell()
-
-            self.file.seek(0, 0)
+            file.seek(0, os.SEEK_END)
+            file_size = file.tell()
+            file.seek(0, 0)
 
             # Encrypt the file, alongside its name. Then store with a random identifier
-            data = self.file.read()
-            filename = basename(self.file.name)
-            cipher = AES.new(get_common_key(self.destination, self.username), AES.MODE_SIV)
-            data = p_dumps({'filename': filename, 'file_blob': data})
-            blob = p_dumps(cipher.encrypt_and_digest(data)) + '\r\n'.encode()
-            blob = b64encode(blob).decode()
+            filename = basename(file.name)
 
             cipher = AES.new(get_common_key(self.destination, self.username), AES.MODE_SIV)
             out_filename = p_dumps(cipher.encrypt_and_digest(filename.encode())) + '\r\n'.encode()
             out_filename = b64encode(out_filename).decode()
 
-            local_filename = ''.join(choice(string. ascii_letters) for i in range(16))  # get a random filename
-            try:
-                with open(f"{data_directory}/cache/{local_filename}", "w+") as f:
-                    f.write(blob)
-            except FileNotFoundError:
-                makedirs(f"{data_directory}/cache")
-                with open(f"{data_directory}/cache/{local_filename}", "w+") as f:
-                    f.write(blob)
-
             sock = socket()
             sock.bind(("0.0.0.0", 0))
-            threading.Thread(target=self.sender_daemon, args=(local_filename, sock, file_size)).start()
+            threading.Thread(target=self.sender_daemon,
+                             args=(file, file_size, self.destination, self.username, sock)).start()
 
             packet = {  # metadata
                 'sender': self.username,
@@ -295,8 +302,11 @@ class PenguChatApp(MDApp):  # this is the main KV app
 
         print(server_address, packet['port'])
         sock.connect((server_address, packet['port']))
-
         cipher = AES.new(get_common_key(packet['destination'], packet['sender']), AES.MODE_SIV)
+
+        packet['filename'] = packet['filename'].replace("[SLASH]", '/')
+        packet['filename'] = packet['filename'].replace("[BACKSLASH]", '\\')
+
         encrypted_filename = p_loads(b64decode(packet['filename']))
         filename = cipher.decrypt_and_verify(encrypted_filename[0], encrypted_filename[1]).decode()
 
@@ -308,6 +318,7 @@ class PenguChatApp(MDApp):  # this is the main KV app
 
         chunk = sock.recv(chunk_size)
         while chunk:
+            # print(chunk)
             file.write(chunk)
             chunk = sock.recv(chunk_size)
 
@@ -335,7 +346,6 @@ class PenguChatApp(MDApp):  # this is the main KV app
 
         application.add_bubble_to_conversation(f, self.incoming['sender'])
         # print("ingest complete")
-
 
     """Helper methods"""
 
@@ -383,7 +393,7 @@ class PenguChatApp(MDApp):  # this is the main KV app
                                                              len(screen.children[0].children) - 1])
                 screen.has_error = False
 
-        pwd = self.pwd  # after the server verifies that the user was correctly registered, also log
+        pwd = self.pwd.strip()  # after the server verifies that the user was correctly registered, also log
         # him in.
         try:
             cipher = AES.new(str(self.__server_key).encode(), AES.MODE_SIV)
@@ -396,7 +406,7 @@ class PenguChatApp(MDApp):  # this is the main KV app
             'command': 'login',
             'password': b64encode(encrypted).decode(),
             'tag': b64encode(tag).decode(),
-            'sender': self.username,
+            'sender': self.username.strip(),
             'isfile': False
         }
         self.root.current = 'loading_screen'
@@ -420,6 +430,7 @@ class PenguChatApp(MDApp):  # this is the main KV app
                     if not screen.has_error:
                         error = ColoredLabel(color='red')
                         error.size_hint_y = 0.2
+
                         error.text = "Username is taken, sorry!"
                         screen.children[0].add_widget(error, len(screen.children[0].children))
                         screen.has_error = True
@@ -435,8 +446,8 @@ class PenguChatApp(MDApp):  # this is the main KV app
                     screen.has_error = False
                 finally:
                     if not screen.has_error:
-                        error = ColoredLabel(color='red')
-                        error.size_hint_y = 0.2
+                        error = MDBanner()
+                        #error.size_hint_y = 0.2
                         error.text = "Username or password incorrect."
                         screen.children[0].add_widget(error, len(screen.children[0].children))
                         screen.has_error = True
@@ -446,7 +457,6 @@ class PenguChatApp(MDApp):  # this is the main KV app
     def new_chat(self):  # called when sending a chat request
 
         def send_chat_request(text_object):  # save the private key to be used later
-            add_private_key(text_box.text, self.__private.get_private_key(), self.username)
             packet = {
                 'sender': self.username,
                 'command': 'friend_request',
@@ -457,6 +467,7 @@ class PenguChatApp(MDApp):  # this is the main KV app
             }
             self.factory.client.transport.write((dumps(packet) + '\r\n').encode())
             # print(f" <- {dumps(packet).encode()}")
+            add_private_key(text_box.text, self.__private.get_private_key(), self.username)
             popup.dismiss()
 
         container = BackgroundContainer(orientation='vertical', padding=10, spacing=10)
@@ -618,6 +629,91 @@ class PenguChatApp(MDApp):  # this is the main KV app
         self.conversation_refs.append(e)
         Clock.schedule_once(e.reload, 0.01)  # addresses the bug where the long messages do not display properly
 
+    @staticmethod
+    def voip_listener_daemon(sock):
+        sock.listen(1)
+        sock.setblocking(False)
+
+        print(sock.getsockname())
+        while application.calling and application.running:
+            try:
+                client_socket, addr = sock.accept()
+            except BlockingIOError:
+                pass
+            else:
+                application.sound_manager.stop()
+                audio_manager = pyaudio.PyAudio()
+                call_stream = audio_manager.open(format=pyaudio.paInt16,
+                                                 channels=1,
+                                                 rate=10240,
+                                                 output=True)
+                while application.calling:
+                    try:
+                        data = client_socket.recv(1024)
+                    except BlockingIOError:
+                        pass
+                    else:
+                        call_stream.write(data)
+                        client_socket.send('ACK'.encode())
+
+                client_socket.close()
+                sock.close()
+                call_stream.close()
+                audio_manager.terminate()
+                return
+        return
+
+    @staticmethod
+    def voip_speaker_daemon():
+        sock = socket()
+
+    def call(self, already_in_call):
+        self.root.current = 'calling'
+        self.calling = True
+        if not already_in_call:
+            self.sound_manager = SoundLoader.load('Assets/dial_tone.wav')
+            self.sound_manager.loop = True
+            self.sound_manager.play()
+
+        sock = socket(AF_INET, SOCK_STREAM)
+        sock.bind(("0.0.0.0", 0))
+
+        packet = {
+            'sender': self.username,
+            'command': 'call',
+            'destination': self.destination,
+            'timestamp': datetime.now().strftime("%m/%d/%Y, %H:%M:%S"),
+            'isfile': False,
+            'address': sock.getsockname()[0],
+            'port': sock.getsockname()[1]
+        }
+        threading.Thread(target=application.voip_listener_daemon, args=(sock,)).start()
+        self.factory.client.transport.write((dumps(packet) + '\r\n').encode())  # send the acknowledgement
+
+    def end_call(self):
+        try:
+            self.sound_manager.stop()
+        except AttributeError:
+            pass
+
+        self.calling = False
+        self.root.current = 'chat_room'
+
+    def fail_call(self):
+        self.sound_manager.loop = False
+        self.sound_manager.stop()
+        self.calling = False
+        self.sound_manager = SoundLoader.load("Assets/busy_trimmed.wav")
+        self.sound_manager.play()
+        self.root.current = 'call_failed'
+        kivy.clock.ClockBase().usleep(2000000)
+        self.root.current = 'chat_room'
+
+    def accept_call(self):
+        self.root.current = 'calling'
+        self.call(already_in_call=True)
+
+
     def init_chat_room(self):  # called upon first entering the chatroom
         self.hide_message_box()
         self.set_sidebar_to_friend_list()
@@ -697,7 +793,6 @@ class PenguChatApp(MDApp):  # this is the main KV app
         self.root.current = 'login'
 
 
-
 class Client(Protocol):  # defines the communications protocol
     def __init__(self):
         self.username = None
@@ -709,7 +804,7 @@ class Client(Protocol):  # defines the communications protocol
         application.succeed_connection()
 
     def dataReceived(self, data):  # called when a packet is received.
-        print(f" -> {data}")       # uncomment this line to get the raw packet data
+        print(f" -> {data}")  # uncomment this line to get the raw packet data
         data = data.decode().split('}')
         for packet in data:
             if packet:
@@ -739,12 +834,12 @@ class Client(Protocol):  # defines the communications protocol
                     f.sender = command['sender']
                     application.add_bubble_to_conversation(f, command['sender'])
                 elif command['command'] == 'prepare_for_file':
-                   application.receiver_daemon(command)
-                elif command['command'] == 'file_received':
-                    application.conversation_refs[-1].switch_mode()
-                    application.root.ids['send_button'].disabled = False
-                    application.root.ids['attach_button'].disabled = False
-                    application.root.ids['message_content'].disabled = False
+                    threading.Thread(target=application.receiver_daemon, args=(command,)).start()
+                elif command['command'] == 'call':
+                    application.root.current = 'call_incoming'
+
+                elif command['command'] == 'call_fail':
+                    application.fail_call()
 
     def connectionLost(self, reason=connectionDone):  # called when the connection dies. RIP.
         Logger.info(reason.value)

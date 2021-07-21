@@ -1,5 +1,7 @@
 #:import C kivy.utils.get_color_from_hex
 #:import RiseInTransition kivy.uix.screenmanager.RiseInTransition
+#:import SlideTransition kivy.uix.screenmanager.SlideTransition
+#:import FadeTransition kivy.uix.screenmanager.FadeTransition
 #:import Window kivy.core.window.Window
 #:import Factory kivy.factory.Factory
 #:import utils kivy.utils
@@ -48,6 +50,13 @@
 	background_normal: 'assets/fallback.png'
 	background_color: 0.181, 0.566, 0.755
 
+<RedButton@Button>:
+	font_size: 30
+	height: 90
+	size_hint: (1, None)
+	background_normal: 'assets/fallback.png'
+	background_color: 1, 0, 0
+
 <MenuButton>:
     background_normal: 'assets/fallback.png'
 	background_color: 0, 0.413, 0.586
@@ -57,11 +66,20 @@
         Line:
             width: 2
             rectangle: self.x, self.y, self.width, self.height
+<MenuIconButton@MDIconButton>:
+    background_normal: 'assets/fallback.png'
+	background_color: 0, 0.413, 0.586
+	canvas.before:
+        Color:
+            rgb: 0, 0.213, 0.286
+        Line:
+            width: 2
+            rectangle: self.x, self.y, self.width, self.height
 
-<TextInput>:
-	font_size: 30
-	multiline: False
-	padding: [10, 0.5 * (self.height - self.line_height)]
+#<TextInput>:
+#	font_size: 30
+#	multiline: False
+#	padding: [10, 0.5 * (self.height - self.line_height)]
 
 <LoginLabel@Label>:
 	color: 0, 0, 0, 1
@@ -71,14 +89,36 @@
 	valign: 'middle'
 	size_hint: (0.4, 1)
 
-<LoginScreen@Screen>:
+<MyBackdropBackLayer@Image>
+    size_hint: .8, .8
+    source: ""
+    pos_hint: {"center_x": .5, "center_y": .6}
+
+<MyBackdropBackLayer@Image>
+    size_hint: 1, 1
+    source: "Assets/bh.png"
+    #pos_hint: {"center_x": .5, "center_y": .5}
+
+<PortraitScreen@MDScreen>:
+    md_bg_color: utils.get_color_from_hex('#ff9f1e')
     on_pre_enter:
-        Window.size = (500, 700)
-	canvas:
-		Rectangle:
-			source:"assets/wallpaper.png"
-			pos: self.pos
-			size: self.size
+        Window.size = (500, 750)
+    on_leave:
+        app.root.ids.loginUsr.text = ""
+        app.root.ids.loginPass.text = ""
+
+    Image:
+        source:'Assets/Logo.png'
+        pos_hint: {'center_x': 0.5, 'center_y': 0.83}
+        size_hint: 0.75, 0.4
+
+    MDLabel:
+        font_name: 'Assets/Shrikhand-Regular'
+        text: "Welcome to PenguChat!"
+        pos_hint: {'center_x': 0.5, 'center_y': 0.70}
+        size_hint: 1, None
+        height: "30dp"
+        halign: 'center'
 
 <BackgroundContainer>
 	canvas.before:
@@ -88,60 +128,277 @@
 	        pos: self.pos
 	        size: self.size
 
-ScreenManager:
-	transition: RiseInTransition()
-	LoginScreen:
-	    name:'loading_screen'
-	    Image:
-	        size: self.size
-	        pos: self.pos
-	        source: "Assets/Loading.gif"
+<LoginField@MDTextFieldRound>
+    normal_color: utils.get_color_from_hex("e7e7e7")
+    pos_hint: {"center_x": .5, "center_y": .5}
+    write_tab: False
+    multiline: False
 
-	LoginScreen:
-		name: 'login'
-		on_leave:
+ScreenManager:
+	transition: SlideTransition(direction="up")
+	#transition: FadeTransition()
+	PortraitScreen:
+	    name:'loading_screen'
+	    MDSpinner:
+            size_hint: None, None
+            size: dp(80), dp(80)
+            pos_hint: {'center_x': .5, 'center_y': .5}
+            active: True
+
+    PortraitScreen:
+        name: 'login'
+        on_enter:
+            app.root.transition = FadeTransition()
+
+        on_leave:
             app.root.ids.loginUsr.text = ""
             app.root.ids.loginPass.text = ""
-		BoxLayout:
+
+        MDCard:                     # CARD
+            size_hint: .95, 0.5
+            pos_hint: {"center_x": .5, "center_y": .30}
+            radius: (60, 60, 60, 60)
+            orientation: 'vertical'
+            MDBoxLayout:                    # Login / Sign up Buttons
+                orientation: 'horizontal'
+                size_hint: (1, 0.1)
+                pos_hint: {"center_x": .5, "center_y": .7}
+                #canvas.before:
+                #    Color:
+                #        rgba: 1, 0, 0, 0
+                #    Line:
+                #        width: 3
+                #        rectangle: self.x, self.y, self.width, self.height
+                MDTextButton:
+                    text: 'Login'
+                    bold: True
+                    font_name: 'Assets/Segoe UI Bold'
+                    size_hint: (.5, 1)
+                    halign: 'center'
+                    disabled: True
+
+                MDSeparator:
+                    orientation: 'vertical'
+                    width: '2dp'
+                MDTextButton:
+                    text: 'Sign up'
+                    font_name: 'Assets/Segoe UI'
+                    size_hint: (.5, 1)
+                    halign: 'center'
+                    on_press:
+                        app.root.transition = SlideTransition()
+                        app.root.transition.direction = 'left'
+                        app.root.current = 'signup'
+            MDBoxLayout:
+                orientation: 'vertical'
+                size_hint: (1, 0.9)
+                spacing: 10
+
+                Widget:
+		            size_hint: (1, 0.1)
+                LoginField:
+                    id: loginUsr
+                    icon_left: "account"
+                    hint_text: 'Username'
+                    size_hint: (0.8, 0.15)
+                    #radius: (30, 30, 30, 30)
+                Widget:
+		            size_hint: (1, 0.1)
+                LoginField:
+                    id: loginPass
+                    icon_left: "lock"
+                    hint_text: 'Password'
+                    size_hint: (0.8, 0.15)
+                    password: True
+					on_text_validate:
+					    app.send_login_data()
+
+		        Widget:
+		            size_hint: (1, 0.1)
+
+                MDFillRoundFlatButton:
+                    text: " " * 30 + 'Login!' + " " * 30
+                    size_hint: (None, 0.15)
+                    md_bg_color: utils.get_color_from_hex('#ff9f1e')
+                    pos_hint: {'center_x': .5, 'center_y': .5}
+                    on_press:
+					    app.send_login_data()
+
+                Widget:
+                    size_hint: (1, 0.25)
+
+    PortraitScreen:
+        name: 'signup'
+        on_enter:
+            app.root.transition = FadeTransition()
+        on_leave:
+            app.root.ids.passwd.text = ""
+            app.root.ids.passwd_r.text = ""
+            app.root.ids.username.text = ""
+        MDCard:                     # CARD
+            size_hint: .95, 0.5
+            pos_hint: {"center_x": .5, "center_y": .30}
+            radius: (60, 60, 60, 60)
+            orientation: 'vertical'
+            MDBoxLayout:                    # Login / Sign up Buttons
+                orientation: 'horizontal'
+                size_hint: (1, 0.1)
+                pos_hint: {"center_x": .5, "center_y": .7}
+                #canvas.before:
+                #    Color:
+                #        rgba: 1, 0, 0, 0
+                #    Line:
+                #        width: 3
+                #        rectangle: self.x, self.y, self.width, self.height
+                MDTextButton:
+                    text: 'Login'
+                    bold: True
+                    font_name: 'Assets/Segoe UI'
+                    size_hint: (.5, 1)
+                    halign: 'center'
+                    on_press:
+                        app.root.transition = SlideTransition()
+                        app.root.transition.direction = 'right'
+
+                        app.root.current = 'login'
+
+                MDSeparator:
+                    orientation: 'vertical'
+                    width: '2dp'
+                MDTextButton:
+                    text: 'Sign up'
+                    font_name: 'Assets/Segoe UI BOLD'
+                    size_hint: (.5, 1)
+                    halign: 'center'
+                    disabled: True
+
+            MDBoxLayout:
+                orientation: 'vertical'
+                size_hint: (1, 0.9)
+                spacing: 10
+
+                Widget:
+		            size_hint: (1, 0.05)
+                LoginField:
+                    id: username
+                    icon_left: "account"
+                    hint_text: 'Username'
+                    size_hint: (0.8, 0.15)
+                    #radius: (30, 30, 30, 30)
+                Widget:
+		            size_hint: (1, 0.05)
+                LoginField:
+                    id: passwd
+                    icon_left: "lock"
+                    hint_text: 'Password'
+                    size_hint: (0.8, 0.15)
+                    password: True
+
+                Widget:
+                    size_hint: (1, 0.05)
+
+                LoginField:
+                    id: passwd_r
+                    icon_left: "lock"
+                    hint_text: 'Password ( repeat )'
+                    size_hint: (0.8, 0.15)
+                    password: True
+					on_text_validate:
+					    app.send_sign_up_data()
+
+                Widget:
+                    size_hint: (1, 0.05)
+
+                #MDFillRoundFlatButton:
+                    #size_hint: None, None
+                    #size: ("10dp", "50dp")
+                    ##text_size: ("10dp", "50dp")
+                    ##md_bg_color: utils.get_color_from_hex("e7e7e7")
+                    #text_color: utils.get_color_from_hex("9b9b9b")
+                    #line_color: utils.get_color_from_hex("9b9b9b")
+                    #pos_hint: {'center_x': .5, 'center_y': .5}
+                    #text: "Sign up!"
+
+
+                MDFillRoundFlatButton:
+                    text: " " * 30 + 'Sign up!' + " " * 30
+                    size_hint: (None, 0.15)
+                    md_bg_color: utils.get_color_from_hex('#ff9f1e')
+                    pos_hint: {'center_x': .5, 'center_y': .5}
+
+		        Widget:
+                    size_hint: (1, 0.25)
+
+	PortraitScreen:
+	    name:'calling'
+	    BoxLayout:
 		    padding: 10
 	        spacing: 10
 			orientation: 'vertical'
 			GridLayout:
-			    rows: 3
+			    rows: 1
                 cols: 2
                 spacing: 10
                 row_default_height: 90
                 row_force_default: True
-				LoginLabel:
-					text: 'Username:'
 
-				TextInput:
-					id: loginUsr
-					write_tab: False
-					multiline: False
+                MDIconButton:
+                    #size_hint: 1., None
+                    icon: 'phone-hangup'
+                    font_size: 30
+                    height: 90
+                    #size_hint: (1, None)
+                    background_normal: 'assets/fallback.png'
+                    background_color: 1, 0, 0
+                    on_press: app.end_call()
 
-				LoginLabel:
-					text: 'Password'
 
-				TextInput:
-					id: loginPass
-					password: True
-					write_tab: False
-					multiline: False
-					on_text_validate:
-					    app.send_login_data()
+    PortraitScreen:
+	    name:'call_incoming'
+	    BoxLayout:
+		    padding: 10
+	        spacing: 10
+			orientation: 'vertical'
+			GridLayout:
+			    rows: 2
+                cols: 1
+                spacing: 10
+                row_default_height: 90
+                row_force_default: True
+                MDIconButton:
+                    #size_hint: 1., None
+                    icon: 'phone-hangup'
+                    font_size: 30
+                    height: 90
+                    #size_hint: (1, None)
+                    background_normal: 'assets/fallback.png'
+                    background_color: 1, 0, 0
+                    on_press: app.root.current = 'chat_room'
+                MDIconButton:
+                    #size_hint: 1., None
+                    icon: 'phone'
+                    font_size: 30
+                    height: 90
+                    #size_hint: (1, None)
+                    background_normal: 'assets/fallback.png'
+                    background_color: 1, 0, 0
+                    on_press: app.root.current = 'calling'
 
-			BlueButton:
-				color: 0, 0, 0, 1
-				text: 'Connect'
-				on_press: app.send_login_data()
-			BlueButton:
-				text: 'Sign up'
-				color: 0, 0, 0, 1
-				on_press: app.root.current = 'signup'
+    PortraitScreen:
+	    name:'call_failed'
+	    BoxLayout:
+		    padding: 10
+	        spacing: 10
+			orientation: 'vertical'
+			GridLayout:
+			    rows: 1
+                cols: 2
+                spacing: 10
+                row_default_height: 90
+                row_force_default: True
 
-	LoginScreen:
-		name: 'signup'
+	PortraitScreen:
+		name: 'signup_old'
 		on_leave:
             app.root.ids.passwd.text = ""
             app.root.ids.passwd_r.text = ""
@@ -318,3 +575,7 @@ ScreenManager:
                                 size: self.parent.size
                                 pos: self.parent.pos
                           #  disabled: True
+
+                        MenuIconButton:
+                            icon: 'phone'
+                            on_press: app.call(already_in_call=False)
