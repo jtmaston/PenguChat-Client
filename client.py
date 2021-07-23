@@ -1,33 +1,27 @@
-import base64
-
 from kivy.config import Config
+from kivy.utils import get_color_from_hex
+
 Config.set('graphics', 'width', '500')
 Config.set('graphics', 'height', '750')
 
 import os
 from platform import platform
+
 OS = platform()
 if OS[0:OS.find('-')] == 'Windows':  # use DirectX for Windows, prevents some issues when using RDP
     os.environ["KIVY_GL_BACKEND"] = "angle_sdl2"  # ( and is generally better for Win )
-import string
 import time
-from io import BytesIO
 from math import floor
 from os.path import basename
-from random import choice
 from socket import socket, AF_INET, SOCK_STREAM
 from tkinter import filedialog, Tk
 
-
 import threading
 
-
-from kivy.uix.screenmanager import RiseInTransition, FadeTransition
+from kivy.uix.screenmanager import FadeTransition
 from kivymd.uix.banner import MDBanner
 
-
 import kivy.clock
-import psutil
 import pyaudio
 from appdirs import user_data_dir
 from kivy.core.audio import SoundLoader
@@ -39,30 +33,27 @@ tkWindow = Tk()  # create a tkinter window, this is used for the native file dia
 tkWindow.withdraw()  # hide it for now
 # init must be done here, to ensure tkinter gets loaded b4 everything else
 
-from builtins import IndexError
 from pickle import dumps as p_dumps
 from base64 import b64encode
 from json import dumps, loads
-from sys import modules, maxsize
+from sys import modules
 from kivymd.app import MDApp
 from kivy.clock import Clock
 from kivy.support import install_twisted_reactor
 from kivy.uix.popup import Popup
 from kivy.uix.textinput import TextInput
-from kivy.core.window import Window
 from pyDH import DiffieHellman
 from DBHandler import *
+
 Clock.max_iteration = 20
 if 'twisted.internet.reactor' in modules:
     del modules['twisted.internet.reactor']
 install_twisted_reactor()  # integrate twisted with kivy
 
 from twisted.internet import reactor
-from twisted.internet.protocol import Protocol, connectionDone, DatagramProtocol
+from twisted.internet.protocol import Protocol, connectionDone
 from twisted.internet.protocol import ClientFactory as Factory
-from twisted.protocols.basic import FileSender
 from twisted.python.log import startLogging
-from twisted.internet.defer import Deferred
 from sys import stdout
 
 startLogging(stdout)
@@ -96,8 +87,14 @@ class PenguChatApp(MDApp):  # this is the main KV app
         Config.set('graphics', 'height', f'{750}')
         self.calling = False
         self.file_socket = socket()
-        self.window_size = (int(8 / 10 * tkWindow.winfo_screenwidth()),
-                            int(8 / 10 * tkWindow.winfo_screenheight()))
+        self.window_size = (
+            int(8 / 10 * tkWindow.winfo_screenwidth()),
+            int(8 / 10 * tkWindow.winfo_screenheight())
+        )
+        self.chatroom_pos = (
+            int((tkWindow.winfo_screenwidth() - self.window_size[0]) / 2),
+            int((tkWindow.winfo_screenheight() - self.window_size[1]) / 2)
+        )
 
         self.username = None
         self.destination = None
@@ -111,6 +108,7 @@ class PenguChatApp(MDApp):  # this is the main KV app
         self.incoming = {}
         self.running = True
         self.sound_manager = None
+        self.sidebar_tab = 'F'
 
     def stop(self, *args):
         global running
@@ -128,8 +126,8 @@ class PenguChatApp(MDApp):  # this is the main KV app
         super(PenguChatApp, self).build()
         self.root.current = 'loading_screen'  # move to the loading screen
         self.factory = ClientFactory()
-        self.root.ids.conversation.bind(minimum_height=self.root.ids.conversation.setter('height'))
-        self.root.ids.request_button.tab = 'F'
+        # self.root.ids.conversation.bind(minimum_height=self.root.ids.conversation.setter('height'))
+        self.root.ids.requests_button.tab = 'F'
         self.icon = 'Assets/circle-cropped.png'
         global server_address
         # reactor.connectTCP("berrybox.local", 8123, self.factory)  # connect to the server
@@ -349,17 +347,6 @@ class PenguChatApp(MDApp):  # this is the main KV app
 
     """Helper methods"""
 
-    def set_sidebar_tab(self):  # changes sidebar tab to either the friend list or to the requests list
-        try:
-            if self.root.ids.request_button.tab == 'F':
-                self.root.ids.request_button.tab = 'R'
-                self.set_sidebar_to_request_list()
-            elif self.root.ids.request_button.tab == 'R':
-                self.root.ids.request_button.tab = 'F'
-                self.set_sidebar_to_friend_list()
-        except IndexError:
-            pass
-
     def secure_server(self, command):  # part of the initial E2E
         self.__server_key = self.__private.gen_shared_key(command['content'])
         self.root.current = 'login'
@@ -447,7 +434,7 @@ class PenguChatApp(MDApp):  # this is the main KV app
                 finally:
                     if not screen.has_error:
                         error = MDBanner()
-                        #error.size_hint_y = 0.2
+                        # error.size_hint_y = 0.2
                         error.text = "Username or password incorrect."
                         screen.children[0].add_widget(error, len(screen.children[0].children))
                         screen.has_error = True
@@ -547,52 +534,62 @@ class PenguChatApp(MDApp):  # this is the main KV app
 
     def set_sidebar_to_friend_list(self):  # set sidebar to the friends list
         self.root.ids.sidebar.clear_widgets()  # clear all items in the sidebar
-        self.root.ids.req.source = 'Assets/requests.png'
-        self.root.ids.request_button.text = f"{len(get_requests(self.username))}\n"  # change the sidebar button
-        self.root.ids.request_button.on_press = self.set_sidebar_to_request_list  # text
+        self.root.ids.conversation_button.color = get_color_from_hex("ff9f1e")
+        self.root.ids.requests_button.color = get_color_from_hex("e4e5e9")
+        self.root.ids.requests_button.font_name = 'Assets/Segoe UI'
+        self.root.ids.conversation_button.font_name = 'Assets/Segoe UI Bold'
+        self.root.ids.sidebar.rows = 0
 
         names = get_friends(self.username)  # call the database to see who the prev conversations were
 
         for i in names:  # create a new button for every friend
-            a = MenuButton(text=i)
+            a = ContactName()  # TODO: this part is ugly and sucks. Too bad!
+            a.text = i
+            a.font_name = 'Assets/Segoe UI'
+            a.size_hint = (1, 1)
+            a.font_size = '25dp'
+            a.halign = 'center'
+            a.valign = 'center'
+            if i == self.destination:
+                a.color = get_color_from_hex("ff9f1e")
+            else:
+                a.color = get_color_from_hex("5f6c74")
+
             a.bind(on_press=self.show_message_box)
             self.root.ids.sidebar.rows += 1
             self.root.ids.sidebar.add_widget(a)
+
             self.friend_refs.append(a)
-        self.root.ids.request_button.canvas.ask_update()
 
     def set_sidebar_to_request_list(self):  # pretty much ditto set_sidebar_to_friend_list, see above
+
         self.root.ids.sidebar.clear_widgets()
-        self.root.ids.request_button.text = ""
-        self.root.ids.req.source = 'Assets/conversation.png'
+        self.root.ids.sidebar.rows = 0
+        self.root.ids.conversation_button.color = get_color_from_hex("e4e5e9")
+        self.root.ids.requests_button.color = get_color_from_hex("ff9f1e")
+        self.root.ids.conversation_button.font_name = 'Assets/Segoe UI'
+        self.root.ids.requests_button.font_name = 'Assets/Segoe UI Bold'
 
-        """Image:
-        source: 'Assets/requests.png'
-        size: self.parent.size
-        pos: (self.parent.pos[0] - 1, self.parent.pos[1])"""
-
-        self.root.ids.request_button.on_press = self.set_sidebar_to_friend_list
-
-        requests = get_requests(self.username)  # fixed
-        for i in requests:
-            e = SidebarElement(i)
-
-            e.accept.bind(on_press=self.accept_request)
-            e.decline.bind(on_press=self.deny_request)
-            self.sidebar_refs[i] = e
-            self.root.ids.sidebar.rows += 1
-            self.root.ids.sidebar.add_widget(e.container)
-        self.root.ids.request_button.canvas.ask_update()
+        # requests = get_requests(self.username)  # fixed
+        # for i in requests:
+        #    e = SidebarElement(i)
+        #    e.accept.bind(on_press=self.accept_request)
+        #    e.decline.bind(on_press=self.deny_request)
+        #    self.sidebar_refs[i] = e
+        #    self.root.ids.sidebar.rows += 1
+        #    self.root.ids.sidebar.add_widget(e.container)
+        # self.root.ids.request_button.canvas.ask_update()
 
     def load_messages(self, partner):  # method to load all the messages
         if len(self.conversation_refs) > 0:  # clear the conversation
-            self.root.ids.conversation.clear_widgets()
+            # self.root.ids.conversation.clear_widgets()
             self.conversation_refs.clear()
-            self.root.ids.conversation.rows = 0
+            # self.root.ids.conversation.rows = 0
 
         messages = get_messages(partner, self.username)  # call the database to get the messages
         for i in messages:  # decrypt every message and then display it
-            self.add_bubble_to_conversation(i, partner)
+            print(i)
+            #self.add_bubble_to_conversation(i, partner)
 
     def add_bubble_to_conversation(self, message, partner):
         cipher = AES.new(get_common_key(partner, self.username), AES.MODE_SIV)
@@ -624,8 +621,8 @@ class PenguChatApp(MDApp):  # this is the main KV app
             else:
                 e = ConversationElement(side='l', isfile=True, filename=filename, truncated=truncated)
 
-        self.root.ids.conversation.rows += 1
-        self.root.ids.conversation.add_widget(e.line)
+        # self.root.ids.conversation.rows += 1
+        # self.root.ids.conversation.add_widget(e.line)
         self.conversation_refs.append(e)
         Clock.schedule_once(e.reload, 0.01)  # addresses the bug where the long messages do not display properly
 
@@ -713,19 +710,20 @@ class PenguChatApp(MDApp):  # this is the main KV app
         self.root.current = 'calling'
         self.call(already_in_call=True)
 
-
     def init_chat_room(self):  # called upon first entering the chatroom
-        self.hide_message_box()
+        # self.hide_message_box()
         self.set_sidebar_to_friend_list()
-        self.root.ids.conversation.clear_widgets()
+        # self.root.ids.conversation.clear_widgets()
 
     """Widget methods"""
 
     def show_message_box(self, button_object):  # show the message box down TODO: text is blue. Why is text blue?
         self.destination = button_object.text
-        self.root.ids.message_box.foreground_color = (0, 0, 0)
-        if self.check_if_hidden(self.root.ids.message_box):
-            self.show_widget(self.root.ids.message_box)
+
+        # self.root.ids.message_box.foreground_color = (0, 0, 0)
+        self.set_sidebar_to_friend_list()
+        # if self.check_if_hidden(self.root.ids.message_box):
+        #  self.show_widget(self.root.ids.message_box)
         self.load_messages(self.destination)
 
     def hide_message_box(self):  # hide the message box

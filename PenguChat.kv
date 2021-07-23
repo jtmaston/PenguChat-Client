@@ -17,10 +17,8 @@
     size_hint: None, None
 	size: 120, 120
 
-#	Image:
-#	    source: 'Assets/file.png'
-#	    size: self.parent.size
- #       pos: self.parent.pos[0], self.parent.pos[1] + 10
+<Label>:
+	font_size: "25dp"
 
 <RightButton>
 	size_hint_y: None
@@ -37,25 +35,6 @@
             radius: [(15, 15), (15, 15), (15, 15), (15, 15)]
             size: self.texture_size
             pos: self.pos
-
-<Label>:
-	font_size: 25
-
-# despacito idk
-
-<BlueButton@Button>:
-	font_size: 30
-	height: 90
-	size_hint: (1, None)
-	background_normal: 'assets/fallback.png'
-	background_color: 0.181, 0.566, 0.755
-
-<RedButton@Button>:
-	font_size: 30
-	height: 90
-	size_hint: (1, None)
-	background_normal: 'assets/fallback.png'
-	background_color: 1, 0, 0
 
 <MenuButton>:
     background_normal: 'assets/fallback.png'
@@ -76,28 +55,6 @@
             width: 2
             rectangle: self.x, self.y, self.width, self.height
 
-#<TextInput>:
-#	font_size: 30
-#	multiline: False
-#	padding: [10, 0.5 * (self.height - self.line_height)]
-
-<LoginLabel@Label>:
-	color: 0, 0, 0, 1
-	font_size: 25
-	text_size: self.size
-	halign: 'left'
-	valign: 'middle'
-	size_hint: (0.4, 1)
-
-<MyBackdropBackLayer@Image>
-    size_hint: .8, .8
-    source: ""
-    pos_hint: {"center_x": .5, "center_y": .6}
-
-<MyBackdropBackLayer@Image>
-    size_hint: 1, 1
-    source: "Assets/bh.png"
-    #pos_hint: {"center_x": .5, "center_y": .5}
 
 <PortraitScreen@MDScreen>:
     md_bg_color: utils.get_color_from_hex('#ff9f1e')
@@ -133,6 +90,14 @@
     pos_hint: {"center_x": .5, "center_y": .5}
     write_tab: False
     multiline: False
+
+<ContactName>
+    size_hint: (1 , 1)
+    halign: 'center'
+    valign: 'center'
+    Image:
+        source: 'Assets/logo.png'
+        pos: self.parent.pos
 
 ScreenManager:
 	transition: SlideTransition(direction="up")
@@ -309,17 +274,6 @@ ScreenManager:
                 Widget:
                     size_hint: (1, 0.05)
 
-                #MDFillRoundFlatButton:
-                    #size_hint: None, None
-                    #size: ("10dp", "50dp")
-                    ##text_size: ("10dp", "50dp")
-                    ##md_bg_color: utils.get_color_from_hex("e7e7e7")
-                    #text_color: utils.get_color_from_hex("9b9b9b")
-                    #line_color: utils.get_color_from_hex("9b9b9b")
-                    #pos_hint: {'center_x': .5, 'center_y': .5}
-                    #text: "Sign up!"
-
-
                 MDFillRoundFlatButton:
                     text: " " * 30 + 'Sign up!' + " " * 30
                     size_hint: (None, 0.15)
@@ -347,9 +301,6 @@ ScreenManager:
                     icon: 'phone-hangup'
                     font_size: 30
                     height: 90
-                    #size_hint: (1, None)
-                    background_normal: 'assets/fallback.png'
-                    background_color: 1, 0, 0
                     on_press: app.end_call()
 
 
@@ -397,59 +348,135 @@ ScreenManager:
                 row_default_height: 90
                 row_force_default: True
 
-	PortraitScreen:
-		name: 'signup_old'
-		on_leave:
-            app.root.ids.passwd.text = ""
-            app.root.ids.passwd_r.text = ""
-            app.root.ids.username.text = ""
-		BoxLayout:
-            padding: 10
-	        spacing: 10
-			orientation: 'vertical'
-			GridLayout:
-			    rows: 3
-                cols: 2
-                spacing: 10
-                row_default_height: 90
-                row_force_default: True
-				LoginLabel:
-					text: 'Username:'
+    MDScreen:
+        md_bg_color: utils.get_color_from_hex("e4e5e9")
+        on_enter:
+			Window.size = (app.window_size[0], app.window_size[1])
+			Window.left = app.chatroom_pos[0]
+			Window.top = app.chatroom_pos[1]
+			app.init_chat_room()
+		name: 'chat_room'
 
-				TextInput:
-					id: username
-					write_tab: False
-					multiline: False
+        BoxLayout:
+            orientation: 'horizontal'
+            size_hint: (1, 1)
+            padding: (0, 0, 30, 0)
+            MDCard:
+                size_hint: (0.25, 1)
+                md_bg_color: utils.get_color_from_hex("44525b")
+                radius: (0, 90, 90, 0)
+                BoxLayout:
+                    orientation: 'vertical'
+                    size_hint: (1,1)
+                    padding: (15 , 0, 0, 0)
+                    Widget:
+                        size_hint: 1, None
+                        height: '50dp'
 
-				LoginLabel:
-					text: 'Password'
+                    MDLabel:
+                        text: "  PenguChat"
+                        font_name: 'Assets/Shrikhand-Regular'
+                        theme_text_color: "Custom"
+                        text_color: utils.get_color_from_hex("ff9f1e")
+                        font_size: '25dp'
+                        size_hint: (1, None)
+                        height: '25dp'
+                        halign: 'left'
 
-				TextInput:
-					id: passwd
-					password: True
-					write_tab: False
-					multiline: False
+                    Widget:
+                        size_hint: 1, None
+                        height: '25dp'
 
-				LoginLabel:
-					text: 'Password (again)'
+                    BoxLayout:
+                        orientation: 'horizontal'
+                        size_hint: (1, None)
+                        height: '75dp'
+                        MDTextButton:
+                            id: conversation_button
+                            text: "Conversations"
+                            font_name: 'Assets/Segoe UI Bold'
+                            color: utils.get_color_from_hex("ff9f1e")
+                            size_hint: (0.5, 1)
+                            font_size: self.width / 7
+                            pos_hint: {"center_x": .5, "center_y": .5}
+                            halign: 'center'
+                            valign: 'top'
+                            on_press:
+                                app.set_sidebar_to_friend_list()
 
-				TextInput:
-					id: passwd_r
-					password: True
-					write_tab: False
-					multiline: False
-					on_text_validate:
-					    app.send_sign_up_data()
+                        MDSeparator:
+                            orientation: 'vertical'
+                            width: '1dp'
+                            color: utils.get_color_from_hex("5f6c74")
+                            size_hint: (None, 0.75)
+                            pos_hint: {"center_x": .5, "center_y": .5}
 
-            BlueButton:
-				text: 'Login'
-				color: 0,0,0,1
-				on_press: app.root.current = "login"
+                        MDTextButton:
+                            id: requests_button
+                            size_hint: (0.5, 1)
+                            font_name: 'Assets/Segoe UI'
+                            text: 'Requests [ 2 ]'
+                            color: utils.get_color_from_hex("e4e5e9")
+                            font_size: self.width / 7
+                            pos_hint: {"center_x": .5, "center_y": .5}
+                            halign: 'center'
+                            valign: 'top'
+                            on_press:
+                                app.set_sidebar_to_request_list()
+                    Widget:
+                        size_hint: (1, None)
+                        height: '25dp'
 
-			BlueButton:
-				text: 'Sign up'
-				color: 0,0,0,1
-				on_press: app.send_sign_up_data()
+                    MDSeparator:
+                        orientation: 'horizontal'
+                        width: '1dp'
+                        size_hint: (0.85, None)
+                        pos_hint: {"center_x": .5, "center_y": .5}
+                        color: utils.get_color_from_hex("5f6c74")
+                    ScrollView:
+                        MDGridLayout:
+                            id: sidebar
+                            adaptive_height: True
+                            row_default_height: '100dp'
+                            row_force_default: True
+                            spacing: 0, 5
+                            rows: 0
+                            cols: 1
+
+                    MDSeparator:
+                        orientation: 'horizontal'
+                        width: '1dp'
+                        size_hint: (0.85, None)
+                        pos_hint: {"center_x": .5, "center_y": .5}
+                        color: utils.get_color_from_hex("5f6c74")
+
+                    Widget:
+                        size_hint: (1, None)
+                        height: '65dp'
+            BoxLayout:
+                orientation: 'vertical'
+                size_hint: (0.65, 1)
+                Widget:
+                    size_hint: (1, 1)
+                    canvas.before:
+                        Color:
+                            rgba: 0, 0, 1, 1
+                        Line:
+                            width: 3
+                            rectangle: self.x, self.y, self.width, self.height
+
+            BoxLayout:
+                orientation: 'vertical'
+                size_hint: (0.05, 1)
+                Widget:
+                    size_hint: (1, 1)
+                    canvas.before:
+                        Color:
+                            rgba: 1, 0, 1, 1
+                        Line:
+                            width: 3
+                            rectangle: self.x, self.y, self.width, self.height
+
 
 
 	Screen:
@@ -460,7 +487,7 @@ ScreenManager:
 		on_leave:
 		    app.hide_tk()
 
-		name: 'chat_room'
+		name: 'chat_room_old'
 		BoxLayout:
 		    orientation: 'vertical'
             BackgroundContainer:
@@ -472,14 +499,14 @@ ScreenManager:
                     orientation: 'vertical'
 
                     BackgroundContainer:
-                        id: top_bar
+                        #id: top_bar
                         height: 40
                         orientation: 'horizontal'
                         size_hint: (1, None)
                         padding: 0, 0, 0, 2
 
                         MenuButton:
-                            id: request_button
+                           # id: request_button
                             width: 40
                             text: '2\n'
                             line_height:0.4
@@ -517,7 +544,7 @@ ScreenManager:
                             row_default_height: '100dp'
                             row_force_default: True
                             spacing: 0, 5
-                            id: sidebar
+                            #id: sidebar
 
                 BoxLayout:
                     padding: (1,0,0,0)
@@ -534,7 +561,7 @@ ScreenManager:
 					    do_scroll_y: True
 
 						GridLayout
-							id: conversation
+							#id: conversation
 							size_hint_y: None
                             cols: 1
                             rows: 0
@@ -544,7 +571,7 @@ ScreenManager:
                     BoxLayout:
                         padding: 0
                         spacing: 0
-                        id: message_box
+                        #id: message_box
                         height: 50
                         orientation: 'horizontal'
                         size_hint: (1, None)
@@ -559,7 +586,7 @@ ScreenManager:
                             id: message_content
                             on_text_validate: app.send_text()
                         MenuButton:
-                            id: send_button
+                           # id: send_button
                             on_press: app.send_text()
                             size_hint: (0.15, 1)
                             Image:
@@ -567,7 +594,7 @@ ScreenManager:
                                 size: self.parent.size
                                 pos: self.parent.pos
                         MenuButton:
-                            id: attach_button
+                            #id: attach_button
                             on_press: app.send_file()
                             size_hint: (0.15, 1)
                             Image:

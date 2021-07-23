@@ -2,6 +2,7 @@ from os import environ
 
 from appdirs import user_data_dir
 from kivy.uix.image import Image
+from kivymd.uix.button import MDTextButton
 
 path = user_data_dir("PenguChat")
 environ['KIVY_NO_ENV_CONFIG'] = '1'
@@ -57,6 +58,10 @@ class MenuButton(Button):
 
 
 class BackgroundContainer(BoxLayout):
+    pass
+
+
+class ContactName(MDTextButton):
     pass
 
 
