@@ -1,7 +1,9 @@
+from abc import ABC
 from os import environ
 
 from appdirs import user_data_dir
 from kivy.uix.image import Image
+from kivy.utils import get_color_from_hex
 from kivymd.uix.button import MDTextButton
 
 path = user_data_dir("PenguChat")
@@ -30,15 +32,6 @@ from pickle import loads as p_loads
 
 # houses the UI elements that couldn't be defined in the KV
 
-colors_rgb = {
-    'red': (1, 0, 0),
-    'gray': (0.4, 0.4, 0.4),
-    'menu_blue': (0, 0.413, 0.586),
-    'menu_light_blue': (0.096, 0.535, 0.656),
-    'outgoing_message': (0.096, 0.535, 0.656),
-    'incoming_message': (0, 0.213, 0.28),
-}
-
 colors_hex = {
     'red': '#ff0000',
     'gray': '#666666',
@@ -47,11 +40,17 @@ colors_hex = {
     'outgoing_message': '#1888a7',
     'incoming_message': '#003647',
     'beak_orange': '#ff9f1e',
-    'gray_body': '44525b'
+    'gray_body': '#44525b'
 }
 
+colors_rgb = dict()
+for color in colors_hex:
+    colors_rgb[color] = get_color_from_hex(colors_hex[color])
 
-# '#%02x%02x%02x' % (0, 128, 64)
+
+# TODO: 4k scales like pure trash
+
+# '#%02x%02x%02x' % (0, 128, 64)     Formula to get hex outta rgb. Here for legacy support
 
 class MenuButton(Button):
     pass
@@ -62,7 +61,8 @@ class BackgroundContainer(BoxLayout):
 
 
 class ContactName(MDTextButton):
-    pass
+    def __draw_shadow__(self, origin, end, context=None):
+        pass
 
 
 class EmptyWidget(Widget):
@@ -104,7 +104,7 @@ class MessageBubble(Label):
 
         self.bind(pos=self.update_rect)
 
-    def update_rect(self, value=None, new_position=None, **kwargs):
+    def update_rect(self, *args):
         self.rect.pos = (self.parent.width - self.width, self.pos[1]) \
             if self.side == 'r' \
             else self.pos
@@ -122,7 +122,7 @@ class FileBubble(Button):
             text = text[0:3] + "..." + text[text.rfind("."):]
         with self.canvas.before:
             self.bc = Color()
-            self.bc.rgb = colors_rgb['incoming_message'] if side == 'l' else colors_rgb['outgoing_message']
+            self.bc.rgb = colors_rgb['gray_body'] if side == 'l' else colors_rgb['beak_orange']
             self.rect = RoundedRectangle(pos=self.pos, size=(150, 150))
             self.rect.radius = [(15, 15), (15, 15), (15, 15), (15, 15)]
             self.side = side
@@ -222,13 +222,13 @@ class ConversationElement:
         if side == 'l':
             self.left = MessageBubble(text=text, side=side) if not isfile \
                 else FileBubble(side=side, text=filename, truncated=truncated)
-            self.left.background_color.rgb = colors_rgb['incoming_message']
+            self.left.background_color.rgb = colors_rgb['gray_body']
             self.right = EmptyWidget()
             self.reload = self.left.update_rect
         else:
             self.right = MessageBubble(text=text, side=side) if not isfile \
                 else FileBubble(side=side, text=filename, truncated=truncated)
-            self.right.background_color.rgb = colors_rgb['outgoing_message']
+            self.right.background_color.rgb = colors_rgb['beak_orange']
             self.left = EmptyWidget()
             self.reload = self.right.update_rect
 

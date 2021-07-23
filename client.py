@@ -42,6 +42,7 @@ from kivy.clock import Clock
 from kivy.support import install_twisted_reactor
 from kivy.uix.popup import Popup
 from kivy.uix.textinput import TextInput
+from kivy.core.window import Window as KVWindow
 from pyDH import DiffieHellman
 from DBHandler import *
 
@@ -108,7 +109,26 @@ class PenguChatApp(MDApp):  # this is the main KV app
         self.incoming = {}
         self.running = True
         self.sound_manager = None
-        self.sidebar_tab = 'F'
+        self.done_typing = False
+        KVWindow.bind(on_key_down=self.down)
+        KVWindow.bind(on_key_up=self.up)
+
+    def up(self, *args):
+        key = args[2]
+        if self.root.ids.message_content.focus and key == 40 and self.done_typing:
+            self.root.ids.message_content.text = ""
+            self.done_typing = False
+
+    def down(self, *args):
+        key = args[2]
+        modifier_list = args[4]
+        if self.root.ids.message_content.focus:
+            if key == 40 and not ('shift' in modifier_list):
+                if self.root.ids.message_content.text.strip() != '':
+                    self.send_text()
+                    self.done_typing = True
+                else:
+                    self.root.ids.message_content.text = ""
 
     def stop(self, *args):
         global running
@@ -130,10 +150,8 @@ class PenguChatApp(MDApp):  # this is the main KV app
         self.root.ids.requests_button.tab = 'F'
         self.icon = 'Assets/circle-cropped.png'
         global server_address
-        # reactor.connectTCP("berrybox.local", 8123, self.factory)  # connect to the server
-        # reactor.connectTCP("192.168.137.138", 8123, self.factory)  # connect to the server
-        reactor.connectTCP(server_address, 8123, self.factory)  # connect to the server
 
+        reactor.connectTCP(server_address, 8123, self.factory)  # connect to the server
         self.theme_cls.colors = dict(self.theme_cls.colors, **colors_hex)
 
     """Server handshake, establish E2E tunnel for password exchange"""
@@ -219,6 +237,7 @@ class PenguChatApp(MDApp):  # this is the main KV app
 
         self.add_bubble_to_conversation(f, self.destination)
         self.factory.client.transport.write((dumps(packet) + '\r\n').encode())
+        self.root.ids.message_content.height = '40dp'
         # print(f" <- {dumps(packet).encode()}")
 
     @staticmethod
@@ -298,7 +317,6 @@ class PenguChatApp(MDApp):  # this is the main KV app
 
         global server_address
 
-        print(server_address, packet['port'])
         sock.connect((server_address, packet['port']))
         cipher = AES.new(get_common_key(packet['destination'], packet['sender']), AES.MODE_SIV)
 
@@ -316,9 +334,17 @@ class PenguChatApp(MDApp):  # this is the main KV app
 
         chunk = sock.recv(chunk_size)
         while chunk:
-            # print(chunk)
             file.write(chunk)
             chunk = sock.recv(chunk_size)
+
+        packet = {
+            'sender': packet['sender'],
+            'destination': packet['destination'],
+            'content': "",
+            packet['isfile']: True,
+        }
+
+        save_message(packet['sender'], packet['destination'], filename)
 
         file.close()
         sock.close()
@@ -352,33 +378,14 @@ class PenguChatApp(MDApp):  # this is the main KV app
         self.root.current = 'login'
 
     def login_ok(self):  # called when login succeeds, changes to the chatroom screen
-        for screen in self.root.screens:  # clean any errors that may have appeared. This is ugly. Too bad!
-            if screen.name == 'login':
-                try:
-                    screen.has_error
-                except AttributeError:
-                    pass
-                else:
-                    if screen.has_error:
-                        screen.has_error = False
-                        screen.children[0].remove_widget(screen.children[0].children[
-                                                             len(screen.children[0].children) - 1])
-
+        self.root.ids.loginUsr.error = False
+        self.root.ids.loginPass.error = False
         self.root.current = 'chat_room'
 
     def signup_ok(self):  # ditto above, only for signup
-        for screen in self.root.screens:
-            if screen.name == 'signup':  # same ugliness
-                try:
-                    screen.has_error
-                except AttributeError:
-                    pass
-                else:
-                    if screen.has_error:
-                        screen.has_error = False
-                        screen.children[0].remove_widget(screen.children[0].children[
-                                                             len(screen.children[0].children) - 1])
-                screen.has_error = False
+        self.root.ids.username.error = False
+        self.root.ids.passwd.error = False
+        self.root.ids.passwd_r.error = False
 
         pwd = self.pwd.strip()  # after the server verifies that the user was correctly registered, also log
         # him in.
@@ -407,21 +414,8 @@ class PenguChatApp(MDApp):  # this is the main KV app
                        self.username)
 
     def username_taken(self):  # called to change the screen to an errored state
-        for screen in self.root.screens:
-            if screen.name == 'signup':
-                try:
-                    screen.has_error
-                except AttributeError:
-                    screen.has_error = False
-                finally:
-                    if not screen.has_error:
-                        error = ColoredLabel(color='red')
-                        error.size_hint_y = 0.2
-
-                        error.text = "Username is taken, sorry!"
-                        screen.children[0].add_widget(error, len(screen.children[0].children))
-                        screen.has_error = True
-
+        self.root.ids.username.normal_color = colors_rgb['red']
+        self.root.ids.username.hint_text = 'Username is taken!'
         self.root.current = 'signup'
 
     def login_failed(self):  # called when the signup process fails.
@@ -582,14 +576,13 @@ class PenguChatApp(MDApp):  # this is the main KV app
 
     def load_messages(self, partner):  # method to load all the messages
         if len(self.conversation_refs) > 0:  # clear the conversation
-            # self.root.ids.conversation.clear_widgets()
+            self.root.ids.conversation.clear_widgets()
+            self.root.ids.conversation.rows = 0
             self.conversation_refs.clear()
-            # self.root.ids.conversation.rows = 0
 
         messages = get_messages(partner, self.username)  # call the database to get the messages
         for i in messages:  # decrypt every message and then display it
-            print(i)
-            #self.add_bubble_to_conversation(i, partner)
+            self.add_bubble_to_conversation(i, partner)
 
     def add_bubble_to_conversation(self, message, partner):
         cipher = AES.new(get_common_key(partner, self.username), AES.MODE_SIV)
@@ -621,10 +614,21 @@ class PenguChatApp(MDApp):  # this is the main KV app
             else:
                 e = ConversationElement(side='l', isfile=True, filename=filename, truncated=truncated)
 
-        # self.root.ids.conversation.rows += 1
-        # self.root.ids.conversation.add_widget(e.line)
+        self.root.ids.conversation.rows += 1
+        self.root.ids.conversation.add_widget(e.line)
         self.conversation_refs.append(e)
-        Clock.schedule_once(e.reload, 0.01)  # addresses the bug where the long messages do not display properly
+
+        height = 0
+        for child in self.root.ids.conversation_scroll.children[0].children:
+            height += child.height
+
+        if height > self.root.ids.conversation_scroll.height:
+            print("Overflow, scrolling down")
+            try:
+                self.root.ids.conversation_scroll.scroll_to(self.conversation_refs[-1].right)
+            except IndexError:
+                pass
+        Clock.schedule_once(e.reload, 0.1)  # addresses the bug where the long messages do not display properly
 
     @staticmethod
     def voip_listener_daemon(sock):
@@ -713,7 +717,7 @@ class PenguChatApp(MDApp):  # this is the main KV app
     def init_chat_room(self):  # called upon first entering the chatroom
         # self.hide_message_box()
         self.set_sidebar_to_friend_list()
-        # self.root.ids.conversation.clear_widgets()
+        self.root.ids.conversation.clear_widgets()
 
     """Widget methods"""
 
@@ -774,19 +778,6 @@ class PenguChatApp(MDApp):  # this is the main KV app
         self.root.current = 'login'
 
     def succeed_connection(self):  # called when connection succeeds, usually after a failed connection
-        for screen in self.root.screens:
-            if screen.name == 'login':
-                try:
-                    screen.network_error
-                except AttributeError:
-                    pass
-                else:
-                    if screen.network_error:
-                        screen.network_error = False
-                        screen.children[0].remove_widget(screen.children[0].children[
-                                                             len(screen.children[0].children) - 1])
-                        for i in screen.children[0].children:
-                            i.disabled = False
         self.secure()
         self.root.current = 'login'
 
