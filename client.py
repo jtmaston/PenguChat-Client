@@ -1,3 +1,5 @@
+import multiprocessing
+
 from kivy.config import Config
 from kivy.utils import get_color_from_hex
 
@@ -211,6 +213,7 @@ class PenguChatApp(MDApp):  # this is the main KV app
             # print(f" <- {dumps(signup_packet).encode()}")
 
     def logout(self):
+        self.running = False
         self.factory.client.transport.loseConnection()
         self.root.current = 'loading_screen'
         self.init_chat_room()  # called to clear the chat room, in anticipation of a new one being loaded
@@ -253,9 +256,7 @@ class PenguChatApp(MDApp):  # this is the main KV app
         global running
         print("Encryption done. Listening.")
         sock.listen()
-        sock.setblocking(False)
-
-        print(sock.getsockname())
+        # sock.setblocking(True)
         while running:
             try:
                 client_socket, addr = sock.accept()
@@ -263,15 +264,11 @@ class PenguChatApp(MDApp):  # this is the main KV app
                 pass
             else:
                 print(f"Started connection with {addr}")
-                start = time.time()
-                # with open(f'{data_directory}/cache/{local_filename}', 'rb') as f:
-                #    client_socket.sendfile(f, 0)
-                client_socket.sendall(blob)
+                application.start = time.time()
+                # sendall(client_socket, blob)
+                a = client_socket.sendall(blob)
                 client_socket.close()
                 sock.close()
-                end = time.time()
-                print("Connection done.")
-                print(f"Transfer rate is {floor(file_size / 1000000 / (end - start + 0.01) * 8)} mbps")
                 return
         return
 
@@ -312,12 +309,16 @@ class PenguChatApp(MDApp):  # this is the main KV app
 
     @staticmethod
     def receiver_daemon(packet):
+        Config.set('graphics', 'width', '0')
+        Config.set('graphics', 'height', '0')
+
+        print("Receiving!")
+        start = time.time()
         chunk_size = 8 * 1024
         sock = socket()
 
         global server_address
 
-        sock.connect((server_address, packet['port']))
         cipher = AES.new(get_common_key(packet['destination'], packet['sender']), AES.MODE_SIV)
 
         packet['filename'] = packet['filename'].replace("[SLASH]", '/')
@@ -332,19 +333,30 @@ class PenguChatApp(MDApp):  # this is the main KV app
             makedirs(f"{data_directory}/files")
             file = open(f"{data_directory}/files/{filename}", "wb+")
 
+        sock.connect((server_address, packet['port']))
+        print("Connected and downloading")
         chunk = sock.recv(chunk_size)
+        blob = b""
+        i = 1
         while chunk:
-            file.write(chunk)
+            #print(f"Got chunk {i}")
+            i += 1
+            blob += chunk
             chunk = sock.recv(chunk_size)
+        end = time.time()
+        print(f"Transfer rate is {floor(len(blob) / 1000000 / (end - start + 0.01) * 8)} mbps")
 
-        packet = {
-            'sender': packet['sender'],
-            'destination': packet['destination'],
-            'content': "",
-            packet['isfile']: True,
-        }
 
-        save_message(packet['sender'], packet['destination'], filename)
+        print("File recv'd. Starting decryption.")
+        cipher = AES.new(get_common_key(packet['destination'], packet['sender']), AES.MODE_SIV)
+        blob = b64decode(blob)
+        blob.strip('\r\n'.encode())
+        blob = p_loads(blob)
+        blob = p_loads(cipher.decrypt_and_verify(blob[0], blob[1]))
+        file.write(blob['file_blob'])
+        print("Decryption done.")
+
+        save_message(packet, packet['destination'], filename)
 
         file.close()
         sock.close()
@@ -381,6 +393,7 @@ class PenguChatApp(MDApp):  # this is the main KV app
         self.root.ids.loginUsr.error = False
         self.root.ids.loginPass.error = False
         self.root.current = 'chat_room'
+        self.running = True
 
     def signup_ok(self):  # ditto above, only for signup
         self.root.ids.username.error = False
@@ -437,39 +450,22 @@ class PenguChatApp(MDApp):  # this is the main KV app
 
     def new_chat(self):  # called when sending a chat request
 
-        def send_chat_request(text_object):  # save the private key to be used later
+        def send_chat_request(partner):  # save the private key to be used later
             packet = {
                 'sender': self.username,
                 'command': 'friend_request',
                 'content': self.__private.gen_public_key(),
-                'destination': text_box.text,
+                'destination': partner,
                 'timestamp': datetime.now().strftime("%m/%d/%Y, %H:%M:%S"),
                 'isfile': False
             }
             self.factory.client.transport.write((dumps(packet) + '\r\n').encode())
             # print(f" <- {dumps(packet).encode()}")
-            add_private_key(text_box.text, self.__private.get_private_key(), self.username)
+            add_private_key(partner, self.__private.get_private_key(), self.username)
             popup.dismiss()
 
-        container = BackgroundContainer(orientation='vertical', padding=10, spacing=10)
-
-        popup = Popup(title='Send friend request',
-                      content=container,
-                      size_hint=(None, None),
-                      size=(400, 300))
-
-        text_box = TextInput(write_tab=False, multiline=False, size_hint_y=0.6)
-        button_box = BoxLayout(orientation='horizontal', size_hint_y=0.4, padding=10, spacing=10)
-
-        text_box.bind(on_text_validate=send_chat_request)
-        button_send = MenuButton(text="Send!", on_press=send_chat_request)
-        button_cancel = MenuButton(text="Cancel", on_press=popup.dismiss)
-
-        container.add_widget(text_box)
-        button_box.add_widget(button_send)
-        button_box.add_widget(button_cancel)
-        container.add_widget(button_box)
-
+        popup = FriendPopup()
+        popup.callback = send_chat_request
         popup.open()
 
     def accept_request(self, button_object):  # called when accepting the request
@@ -527,6 +523,7 @@ class PenguChatApp(MDApp):  # this is the main KV app
     """Loading methods"""
 
     def set_sidebar_to_friend_list(self):  # set sidebar to the friends list
+        self.root.ids.requests_button.text = f"Requests [ {len(get_requests(self.username))} ]"
         self.root.ids.sidebar.clear_widgets()  # clear all items in the sidebar
         self.root.ids.conversation_button.color = get_color_from_hex("ff9f1e")
         self.root.ids.requests_button.color = get_color_from_hex("e4e5e9")
@@ -564,22 +561,24 @@ class PenguChatApp(MDApp):  # this is the main KV app
         self.root.ids.conversation_button.font_name = 'Assets/Segoe UI'
         self.root.ids.requests_button.font_name = 'Assets/Segoe UI Bold'
 
-        # requests = get_requests(self.username)  # fixed
-        # for i in requests:
-        #    e = SidebarElement(i)
-        #    e.accept.bind(on_press=self.accept_request)
-        #    e.decline.bind(on_press=self.deny_request)
-        #    self.sidebar_refs[i] = e
-        #    self.root.ids.sidebar.rows += 1
-        #    self.root.ids.sidebar.add_widget(e.container)
-        # self.root.ids.request_button.canvas.ask_update()
+        requests = get_requests(self.username)  # fixed
+        self.root.ids.requests_button.text = f"Requests [ {len(requests)} ]"
+        for i in requests:
+            e = SidebarElement(i)
+            e.accept.bind(on_press=self.accept_request)
+            e.decline.bind(on_press=self.deny_request)
+            self.sidebar_refs[i] = e
+            self.root.ids.sidebar.rows += 1
+            self.root.ids.sidebar.add_widget(e.container)
+            self.root.ids.requests_button.canvas.ask_update()
 
     def load_messages(self, partner):  # method to load all the messages
         if len(self.conversation_refs) > 0:  # clear the conversation
             self.root.ids.conversation.clear_widgets()
             self.root.ids.conversation.rows = 0
             self.conversation_refs.clear()
-
+        self.root.ids.message_content.hidden = False
+        self.root.ids.message_content.height = '40dp'
         messages = get_messages(partner, self.username)  # call the database to get the messages
         for i in messages:  # decrypt every message and then display it
             self.add_bubble_to_conversation(i, partner)
@@ -623,11 +622,11 @@ class PenguChatApp(MDApp):  # this is the main KV app
             height += child.height
 
         if height > self.root.ids.conversation_scroll.height:
-            print("Overflow, scrolling down")
             try:
                 self.root.ids.conversation_scroll.scroll_to(self.conversation_refs[-1].right)
             except IndexError:
                 pass
+
         Clock.schedule_once(e.reload, 0.1)  # addresses the bug where the long messages do not display properly
 
     @staticmethod
@@ -715,52 +714,23 @@ class PenguChatApp(MDApp):  # this is the main KV app
         self.call(already_in_call=True)
 
     def init_chat_room(self):  # called upon first entering the chatroom
-        # self.hide_message_box()
+        self.root.ids.message_content.hidden = True
+        self.set_sidebar_to_request_list()
         self.set_sidebar_to_friend_list()
         self.root.ids.conversation.clear_widgets()
 
     """Widget methods"""
 
-    def show_message_box(self, button_object):  # show the message box down TODO: text is blue. Why is text blue?
+    def show_message_box(self, button_object):
         self.destination = button_object.text
-
-        # self.root.ids.message_box.foreground_color = (0, 0, 0)
         self.set_sidebar_to_friend_list()
-        # if self.check_if_hidden(self.root.ids.message_box):
-        #  self.show_widget(self.root.ids.message_box)
+
         self.load_messages(self.destination)
 
-    def hide_message_box(self):  # hide the message box
-        self.hide_widget(self.root.ids.message_box)
 
-    def hide_widget(self, widget):  # helper method designed to hide widgets
-        if not self.check_if_hidden(widget):
-            wid = widget
-            wid.saved_attrs = wid.height, wid.size_hint_y, wid.opacity, wid.disabled
-            wid.height, wid.size_hint_y, wid.opacity, wid.disabled = 0, None, 0, True
-            widget = wid
-            if widget:
-                pass
-
-    def show_widget(self, widget):  # reverse of above
-        wid = widget
-        if self.check_if_hidden(widget):
-            wid.height, wid.size_hint_y, wid.opacity, wid.disabled = wid.saved_attrs
-            del wid.saved_attrs
-            widget = wid
-            if widget:
-                pass
 
     """Static methods"""
 
-    @staticmethod
-    def check_if_hidden(widget):  # needed to check if widget was hidden
-        try:
-            widget.saved_attrs
-        except AttributeError:
-            return False
-        else:
-            return True
 
     def fail_connection(self):  # called when connection has failed
         for screen in self.root.screens:
@@ -812,7 +782,7 @@ class Client(Protocol):  # defines the communications protocol
                     application.login_failed()
                 elif command['command'] == 'friend_request':
                     add_request(command)
-                    application.root.ids.request_button.text = f"{len(get_requests(application.username))}\n"
+                    application.root.ids.requests_button.text = f"Requests [ {len(get_requests(application.username))} ]"
                 elif command['command'] == 'friend_accept':
                     application.accept_request_reply(command)
                 elif command['command'] == 'message':
@@ -823,12 +793,17 @@ class Client(Protocol):  # defines the communications protocol
                     f.sender = command['sender']
                     application.add_bubble_to_conversation(f, command['sender'])
                 elif command['command'] == 'prepare_for_file':
-                    threading.Thread(target=application.receiver_daemon, args=(command,)).start()
+                    #threading.Thread(target=application.receiver_daemon, args=(command,)).start()
+                    multiprocessing.Process(target=application.receiver_daemon, args=(command, )).start()
+
                 elif command['command'] == 'call':
                     application.root.current = 'call_incoming'
-
                 elif command['command'] == 'call_fail':
                     application.fail_call()
+                elif command['command'] == 'file_done':
+                    print("Connection done.")
+                    end = time.time()
+                    print(f"Transfer rate is {floor(command['file_size'] / 1000000 / (end - application.start + 0.01) * 8)} mbps")
 
     def connectionLost(self, reason=connectionDone):  # called when the connection dies. RIP.
         Logger.info(reason.value)
@@ -867,7 +842,7 @@ if __name__ == '__main__':
      if hasattr(sys, '_MEIPASS'):
         resource_add_path(os.path.join(sys._MEIPASS))
      """
-
+    multiprocessing.freeze_support()
     globalLogPublisher.addObserver(analyze)
     application.run()
     ExceptionManager.add_handler(ExceptionWatchdog())

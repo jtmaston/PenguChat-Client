@@ -3,6 +3,9 @@ from os import environ
 
 from appdirs import user_data_dir
 from kivy.uix.image import Image
+from kivy.uix.modalview import ModalView
+from kivy.uix.popup import Popup
+from kivy.uix.textinput import TextInput
 from kivy.utils import get_color_from_hex
 from kivymd.uix.button import MDTextButton
 
@@ -58,6 +61,16 @@ class MenuButton(Button):
 
 class BackgroundContainer(BoxLayout):
     pass
+
+
+class FriendPopup(ModalView):
+    pass
+
+
+class HiddenTextInput(TextInput):
+    def __init__(self, **kwargs):
+        super(HiddenTextInput, self).__init__(**kwargs)
+        self.hidden = True
 
 
 class ContactName(MDTextButton):

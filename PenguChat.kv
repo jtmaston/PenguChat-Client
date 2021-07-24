@@ -56,6 +56,7 @@
             rectangle: self.x, self.y, self.width, self.height
 
 
+
 <PortraitScreen@MDScreen>:
     md_bg_color: utils.get_color_from_hex('#ff9f1e')
     on_pre_enter:
@@ -98,6 +99,67 @@
     Image:
         source: 'Assets/logo.png'
         pos: self.parent.pos
+
+<FriendPopup@ModalView>:
+    size_hint: (None, None)
+    background_color: 0, 0, 0, 0
+    size: 4 * app.window_size[0] / 10, 4 * app.window_size[1] / 10
+
+    MDCard:
+        orientation: 'vertical'
+        radius: (60, 60, 60, 60)
+        md_bg_color: utils.get_color_from_hex("e4e5e9")
+        #pos_hint: {'center_x': .5, 'center_y': .5}
+        orientation: 'vertical'
+        spacing: '10dp'
+        MDLabel:
+            font_name: 'Assets/Shrikhand-Regular'
+            text: "Penguins may not be able to fly, but these requests sure can!"
+            pos_hint: {'center_x': 0.5, 'center_y': 0.5}
+            size_hint: (1, 0.6)
+            height: '100dp'
+            halign: 'center'
+            valign: 'top'
+            theme_text_color: "Custom"
+            text_color: utils.get_color_from_hex("ff9f1e")
+
+        MDTextField:
+            id: friend_name
+            font_size: '20dp'
+            hint_text: "Enter your friend's name"
+            size_hint: (.8, 0.2)
+            background_color: 0,0,0,1
+            theme_text_color: "Custom"
+            color_mode: "custom"
+            text_color: utils.get_color_from_hex("ff9f1e")
+            current_hint_text_color: utils.get_color_from_hex("a6a8ac")
+            line_color_focus: utils.get_color_from_hex("a6a8ac")
+            cursor_color: utils.get_color_from_hex("a6a8ac")
+            pos_hint: {"center_x": .5, "center_y": .5}
+            on_text_validate:
+                self.parent.parent.callback(self.text)
+                self.text = ""
+        BoxLayout:
+            orientation: 'horizontal'
+            size_hint: (.8, .2)
+            pos_hint: {"center_x": .5, "center_y": .5}
+            MDTextButton:
+                halign: 'center'
+                valign: 'center'
+                size_hint: 0.5, 1
+                text: 'Send'
+                font_name: 'Assets/Segoe UI'
+                on_press:
+                    self.parent.parent.parent.callback(self.parent.parent.children[1].text)        # This is horrible. Too bad!
+                    self.parent.parent.children[1].text = ""
+            MDTextButton:
+                halign: 'center'
+                valign: 'center'
+                size_hint: 0.5, 1
+                text: 'Cancel'
+                font_name: 'Assets/Segoe UI'
+                on_press:
+                    self.parent.parent.parent.dismiss()
 
 ScreenManager:
 	transition: SlideTransition(direction="up")
@@ -355,12 +417,16 @@ ScreenManager:
 			Window.left = app.chatroom_pos[0]
 			Window.top = app.chatroom_pos[1]
 			app.init_chat_room()
+
+	    on_leave:
+	        app.hide_tk()
+
 		name: 'chat_room'
 
         BoxLayout:
             orientation: 'horizontal'
             size_hint: (1, 1)
-            padding: (0, 0, 30, 0)
+            padding: (0, 0, '20dp', 0)
             MDCard:
                 size_hint: (0.25, 1)
                 md_bg_color: utils.get_color_from_hex("44525b")
@@ -415,7 +481,7 @@ ScreenManager:
                             id: requests_button
                             size_hint: (0.5, 1)
                             font_name: 'Assets/Segoe UI'
-                            text: 'Requests [ 2 ]'
+                            text: ''
                             color: utils.get_color_from_hex("e4e5e9")
                             font_size: self.width / 7
                             pos_hint: {"center_x": .5, "center_y": .5}
@@ -471,14 +537,13 @@ ScreenManager:
                             spacing: 0, 10
                             padding: 0, 10
 
-                TextInput:
+                HiddenTextInput:
                     id: message_content
                     font_size: '20dp'
                     background_color: 0,0,0,0
-                    #cursor_color: C('#000000')
                     size_hint: (1, None)
                     pos_hint: {"center_x": .5, "center_y": .5}
-                    height: '20dp' if self.minimum_height == 0 else (self.minimum_height if self.minimum_height < 100 else 100)
+                    height: '0dp' if (self.hidden) else ('20dp' if( self.minimum_height == 0 ) else (self.minimum_height if self.minimum_height < 100 else 100))
                     multiline: True
                     canvas.before:
                         Color:
@@ -496,141 +561,20 @@ ScreenManager:
             BoxLayout:
                 orientation: 'vertical'
                 size_hint: (0.05, 1)
-                Widget:
-                    size_hint: (1, 1)
-                    canvas.before:
-                        Color:
-                            rgba: 1, 0, 1, 1
-                        Line:
-                            width: 3
-                            rectangle: self.x, self.y, self.width, self.height
-
-
-
-	Screen:
-		on_enter:
-			Window.size = (app.window_size[0], app.window_size[1])
-			app.init_chat_room()
-
-		on_leave:
-		    app.hide_tk()
-
-		name: 'chat_room_old'
-		BoxLayout:
-		    orientation: 'vertical'
-            BackgroundContainer:
-                orientation: 'horizontal'
-                padding: 5
-                spacing: 5
-                BoxLayout:
-                    size_hint_x: 0.3
-                    orientation: 'vertical'
-
-                    BackgroundContainer:
-                        #id: top_bar
-                        height: 40
-                        orientation: 'horizontal'
-                        size_hint: (1, None)
-                        padding: 0, 0, 0, 2
-
-                        MenuButton:
-                           # id: request_button
-                            width: 40
-                            text: '2\n'
-                            line_height:0.4
-                            bold: True
-                            font_size: 15
-                            halign: 'center'
-                            Image:
-                                #id: req
-                                source: 'Assets/requests.png'
-                                size: self.parent.size
-                                pos: (self.parent.pos[0] - 1, self.parent.pos[1])
-
-                        MenuButton:
-                            width: 40
-                            on_press: app.logout()
-                            Image:
-                                source: 'Assets/logout.png'
-                                size: self.parent.size
-                                pos: self.parent.pos
-                        MenuButton:
-                            width: 40
-                            on_press: app.new_chat()
-                            Image:
-                                source: 'Assets/new_convo.png'
-                                size: self.parent.size
-                                pos: self.parent.pos
-
-                    ScrollView:
-
-                        GridLayout:
-                            size_hint_y: None
-                            height: self.minimum_height
-                            cols: 1
-                            rows: 0
-                            row_default_height: '100dp'
-                            row_force_default: True
-                            spacing: 0, 5
-                            #id: sidebar
-
-                BoxLayout:
-                    padding: (1,0,0,0)
-                    orientation: 'vertical'
-                    canvas.before:
-                        Color:
-							rgb: 1, 1, 1
-						Rectangle:
-							source:"assets/large-wallpaper.png"
-							pos: self.pos
-							size: self.size
-					ScrollView:
-					    do_scroll_x: False
-					    do_scroll_y: True
-
-						GridLayout
-							#id: conversation
-							size_hint_y: None
-                            cols: 1
-                            rows: 0
-                            spacing: 0, 10
-                            padding: 0, 10
-
-                    BoxLayout:
-                        padding: 0
-                        spacing: 0
-                        #id: message_box
-                        height: 50
-                        orientation: 'horizontal'
-                        size_hint: (1, None)
-                        TextInput:
-                            padding: 20, 0
-                            canvas.before:
-                                Color:
-                                    rgb: 0, 0.213, 0.286
-                                Line:
-                                    width: 0.5
-                                    rectangle: self.x, self.y, self.width, self.height
-                           # id: message_content
-                            on_text_validate: app.send_text()
-                        MenuButton:
-                           # id: send_button
-                            on_press: app.send_text()
-                            size_hint: (0.15, 1)
-                            Image:
-                                source: 'Assets/send.png'
-                                size: self.parent.size
-                                pos: self.parent.pos
-                        MenuButton:
-                            #id: attach_button
-                            on_press: app.send_file()
-                            size_hint: (0.15, 1)
-                            Image:
-                                source: 'Assets/attach.png'
-                                size: self.parent.size
-                                pos: self.parent.pos
-                          #  disabled: True
-
-                        MenuIconButton:
-                            icon: 'phone'
-                            on_press: app.call(already_in_call=False)
+                padding: ('10dp', 0, 0, '17dp')
+                MDIconButton:
+                    icon: 'logout'
+                    on_press:
+                        app.logout()
+                MDIconButton:
+                    icon: 'account-plus'
+                    on_press:
+                        app.new_chat()
+                MDIconButton:
+                    icon: 'paperclip'
+                    on_press:
+                        app.send_file()
+                MDIconButton:
+                    icon: 'send'
+                    on_press:
+                        app.send_text()

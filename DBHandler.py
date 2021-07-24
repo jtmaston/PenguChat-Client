@@ -176,6 +176,16 @@ def save_message(packet, username, filename=None):
         message = packet['content'].encode()
     except AttributeError:
         message = packet['content']
+    except KeyError:
+        message = None
+
+    try:
+        packet['isfile']
+    except KeyError:
+        packet['isfile'] = False
+
+    if message is None:
+        message = b''
 
     Messages(
         sender=packet['sender'],
