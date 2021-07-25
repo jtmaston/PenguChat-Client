@@ -206,6 +206,8 @@ if __name__ == '__main__':  # While this *may* be considered ugly, spawning mult
             self.build()
 
         def send_text(self):
+            if self.destination is None or self.destination == "":
+                return
             message_text = self.root.ids.message_content.text
             self.root.ids.message_content.text = ""  # clear the message box's contents
             cipher = AES.new(get_common_key(self.destination, self.username), AES.MODE_SIV)  # encryption part
@@ -253,6 +255,8 @@ if __name__ == '__main__':  # While this *may* be considered ugly, spawning mult
                     self.conversation_refs.append(e)
 
         def send_file(self):
+            if self.destination is None or self.destination == "":
+                return
             file = filedialog.askopenfile(mode="rb")
             tkWindow.update()
             self.hide_tk()
@@ -382,9 +386,6 @@ if __name__ == '__main__':  # While this *may* be considered ugly, spawning mult
             friend = button_object.parent.parent.username  # Must move up two boxes, first parent is ver box second is hor
             friend_key = int(get_key_for_request(self.username, friend).decode())
             common_key = self.__private.gen_shared_key(friend_key)
-            add_common_key(friend, common_key, self.username)  # add the common key to the database
-            self.root.ids.sidebar.remove_widget(button_object.parent)  # remove the request entry in the sidebar
-            delete_request(friend)  # also delete the request from the db
             packet = {
                 'sender': self.username,
                 'command': 'friend_accept',
@@ -393,15 +394,24 @@ if __name__ == '__main__':  # While this *may* be considered ugly, spawning mult
                 'timestamp': datetime.now().strftime("%m/%d/%Y, %H:%M:%S"),
                 'isfile': False
             }
-            start_message = {  # ths is a blank, ignored packed designed to allow an empty chat room to be displayed
-                'sender': packet['destination'],
-                'destination': packet['sender'],
-                'command': 'message',
-                'content': chr(224),
-                'timestamp': datetime.now().strftime("%m/%d/%Y, %H:%M:%S"),
-                'isfile': False
-            }
-            save_message(start_message, self.username)  # save it
+
+            try:
+                get_common_key(friend, self.username)
+            except DoesNotExist:
+                start_message = {  # ths is a blank, ignored packed designed to allow an empty chat room to be displayed
+                    'sender': packet['destination'],
+                    'destination': packet['sender'],
+                    'command': 'message',
+                    'content': chr(224),
+                    'timestamp': datetime.now().strftime("%m/%d/%Y, %H:%M:%S"),
+                    'isfile': False
+                }
+                save_message(start_message, self.username)  # save it
+            add_common_key(friend, common_key, self.username)  # add the common key to the database
+
+            self.root.ids.sidebar.remove_widget(button_object.parent)  # remove the request entry in the sidebar
+            delete_request(friend)  # also delete the request from the db
+
             del self.sidebar_refs[friend]
             self.set_sidebar_to_friend_list()
             self.factory.client.transport.write((dumps(packet) + '\r\n').encode())  # send the acknowledgement
@@ -490,6 +500,9 @@ if __name__ == '__main__':  # While this *may* be considered ugly, spawning mult
             self.root.ids.message_content.hidden = False
             self.root.ids.message_content.height = '40dp'
             self.root.ids.right_bar.width = '50dp'
+            self.root.ids.ppclip.text_color = get_color_from_hex("1e1f1f")
+            self.root.ids.snd.text_color = get_color_from_hex("1e1f1f")
+
             messages = get_messages(partner, self.username)  # call the database to get the messages
             for i in messages:  # decrypt every message and then display it
                 self.add_bubble_to_conversation(i, partner)
@@ -594,7 +607,7 @@ if __name__ == '__main__':  # While this *may* be considered ugly, spawning mult
 
         def init_chat_room(self):  # called upon first entering the chatroom
             self.root.ids.message_content.hidden = True
-            self.root.ids.right_bar.width = '0dp'
+            #self.root.ids.right_bar.width = '0dp'
             self.set_sidebar_to_request_list()
             self.set_sidebar_to_friend_list()
             self.root.ids.conversation.clear_widgets()

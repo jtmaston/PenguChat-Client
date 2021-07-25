@@ -1,6 +1,10 @@
+from base64 import b64decode, b64encode
 from datetime import datetime
 from os import makedirs, environ
+from pickle import loads as p_loads
+from pickle import dumps as p_dumps
 
+from Crypto.Cipher import AES
 from appdirs import user_data_dir
 from peewee import *
 
@@ -97,6 +101,29 @@ def add_common_key(partner_name, common_key, added_by):  # add a common key to t
         query.common_key = common_key
         query.added_by = added_by
         query.key_updated = datetime.now()
+
+        old_key = get_common_key(partner_name, added_by)
+        print(old_key)
+        messages = get_messages(partner_name, added_by, raw=True)
+        for message in messages:
+            cipher = AES.new(old_key, AES.MODE_SIV)
+            if not message.isfile:
+                try:
+                    encrypted = p_loads(b64decode(message.message_data))
+                except EOFError:
+                    print(f"Message {message} is corrupted.")
+                else:
+                    try:
+                        if message.sender == added_by:
+                            message.message_data = cipher.decrypt_and_verify(encrypted[0], encrypted[1]).decode()
+                            print(message.message_data)
+                            print(common_key)
+                            new_cipher = AES.new(str(common_key).encode(), AES.MODE_SIV)
+                            message.message_data = b64encode(p_dumps(new_cipher.encrypt_and_digest(message.message_data.encode())))
+                            message.save()
+                    except ValueError:
+                        print("[Message decryption failed. Most likely the key has changed]")
+
         query.save()
 
 
@@ -161,11 +188,14 @@ def get_friends(username):
     )))
 
 
-def get_messages(partner, username):
+def get_messages(partner, username, raw=False):
     query = Messages.select().where(
         ((Messages.destination == partner) & (Messages.sender == username)) |
-        ((Messages.sender == partner) & (Messages.destination == username))
+        ((Messages.sender == partner) & (Messages.destination == username)) &
+        (Messages.added_by == username)
     ).order_by(Messages.timestamp)
+    if raw:
+        return query
     try:
         return [i for i in query if i.message_data.decode() != chr(224) and i.added_by == username]
     except AttributeError:

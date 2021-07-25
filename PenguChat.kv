@@ -572,11 +572,21 @@ ScreenManager:
                     icon: 'account-plus'
                     on_press:
                         app.new_chat()
+
+                Widget:
+                    size_hint: (1, 1)
+
                 MDIconButton:
+                    id: ppclip
                     icon: 'paperclip'
+                    theme_text_color: 'Custom'
+                    text_color: utils.get_color_from_hex("e4e5e9")
                     on_press:
                         app.send_file()
                 MDIconButton:
+                    id: snd
                     icon: 'send'
+                    theme_text_color: 'Custom'
+                    text_color: utils.get_color_from_hex("e4e5e9")
                     on_press:
                         app.send_text()
