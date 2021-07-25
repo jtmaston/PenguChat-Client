@@ -8,7 +8,7 @@ path = user_data_dir("PenguChat")
 environ['KIVY_NO_ENV_CONFIG'] = '1'
 environ["KCFG_KIVY_LOG_LEVEL"] = "debug"
 environ["KCFG_KIVY_LOG_DIR"] = path + '/PenguChat/Logs'
-from kivy import Logger
+# from kivy import Logger
 
 db = SqliteDatabase(path + '/messages.db')
 
@@ -136,7 +136,8 @@ def get_private_key(partner_name, username):
             (PrivateKeys.added_by == username)
         )
     except PrivateKeys.DoesNotExist:
-        Logger.error("DBHandler: Key not found for user!")
+        # Logger.error("DBHandler: Key not found for user!")
+        pass
     else:
         return int(key.self_private_key.decode())
 
@@ -228,7 +229,7 @@ def get_requests(username):
 try:
     db.create_tables([CommonKeys, Messages, PrivateKeys, Requests])
 except OperationalError as t:
-    Logger.warning("DBHandler: Creating database file.")
+    # Logger.warning("DBHandler: Creating database file.")
     try:
         makedirs(path)
     except FileExistsError:

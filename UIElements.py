@@ -78,6 +78,13 @@ class ContactName(MDTextButton):
         pass
 
 
+class FauxMessage:
+    def __init__(self):
+        self.isfile = None
+        self.message_data = None
+        self.sender = None
+
+
 class EmptyWidget(Widget):
     def update_rect(self):
         pass
