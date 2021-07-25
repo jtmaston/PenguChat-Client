@@ -1,41 +1,28 @@
+# This is, admittedly, a bit messy. In conjunction with PenguChat.kv, this describes the many elements of the UI.
+# KV is a good language ( i think it's a language ) but limited when it comes to dynamic adjustment and stuff.
 import os
-from abc import ABC
-from os import environ
 from sys import platform
 
 from appdirs import user_data_dir
 from kivy.uix.image import Image
 from kivy.uix.modalview import ModalView
-from kivy.uix.popup import Popup
 from kivy.uix.textinput import TextInput
 from kivy.utils import get_color_from_hex
-from kivymd.uix.button import MDTextButton, MDFlatButton
+from kivymd.uix.button import MDTextButton
 
 path = user_data_dir("PenguChat")
-environ['KIVY_NO_ENV_CONFIG'] = '1'
-environ["KCFG_KIVY_LOG_LEVEL"] = "error"
-environ["KCFG_KIVY_LOG_DIR"] = path + '/PenguChat/Logs'
 
-from base64 import b64decode
-from tkinter.filedialog import SaveAs, asksaveasfile, asksaveasfilename
+from tkinter.filedialog import asksaveasfilename
 
-from Crypto.Cipher import AES
-from kivy import Logger, LOG_LEVELS
+from kivy import Logger
 
-from DBHandler import get_common_key, get_file_for_message
-
-Logger.setLevel(LOG_LEVELS["error"])
 from kivy.base import ExceptionHandler, ExceptionManager
 from kivy.graphics.context_instructions import Color
-from kivy.graphics.vertex_instructions import Rectangle, RoundedRectangle, Ellipse
+from kivy.graphics.vertex_instructions import Rectangle, RoundedRectangle
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.widget import Widget
-
-from pickle import loads as p_loads
-
-# houses the UI elements that couldn't be defined in the KV
 
 colors_hex = {
     'red': '#ff0000',
@@ -48,6 +35,7 @@ colors_hex = {
     'gray_body': '#44525b'
 }
 
+# generates rgb values from hex
 colors_rgb = dict()
 for color in colors_hex:
     colors_rgb[color] = get_color_from_hex(colors_hex[color])
@@ -57,12 +45,8 @@ for color in colors_hex:
 
 # '#%02x%02x%02x' % (0, 128, 64)     Formula to get hex outta rgb. Here for legacy support
 
-class BackgroundContainer(BoxLayout):
-    pass
-
-
-class FriendPopup(ModalView):
-    pass
+class FriendPopup(ModalView):   # these empty of kinda empty classes are defined in the .kv file. They're here for the
+    pass                        # python interpreter
 
 
 class HiddenTextInput(TextInput):
@@ -110,6 +94,7 @@ class ColoredLabel(Label):
         self.rect.pos = self.pos
         self.rect.size = self.size
 
+# Everything here is kinda insane. It does make sense, somehow.
 
 class MessageBubble(Label):
     def __init__(self, side, **kwargs):
@@ -137,6 +122,7 @@ class FileBubble(Button):
     def __init__(self, side, text, truncated, **kwargs):
         super(FileBubble, self).__init__(**kwargs)
         self.background_color = (0, 0, 0, 0)
+        self.long_text = text
         if len(text) > 10:
             text = text[0:3] + "..." + text[text.rfind("."):]
         with self.canvas.before:
@@ -171,7 +157,7 @@ class FileBubble(Button):
 
     def callback(self, *args, **kwargs):
 
-        f = asksaveasfilename(initialfile=self.text.strip())
+        f = asksaveasfilename(initialfile=self.long_text.strip())
 
         if f is None or f == "":
             # os.remove(f.name)  Done: this was dangerous. Let's think of a better way. | discovered function above

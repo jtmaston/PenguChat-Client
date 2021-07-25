@@ -7,18 +7,23 @@
 #:import utils kivy.utils
 #:import math math
 
+# This describes the many elements of the UI. KV is similar to html and css.
+
 <MessageBubble>
 	size_hint: None, None
 	padding: 10, 5
 	spacing: 0, 0
     size: self.texture_size
 
+
 <FileBubble>
     size_hint: None, None
 	size: 120, 120
 
+
 <Label>:
 	font_size: "25dp"
+
 
 <RightButton>
 	size_hint_y: None
@@ -36,6 +41,7 @@
             size: self.texture_size
             pos: self.pos
 
+
 <MenuButton>:
     background_normal: 'assets/fallback.png'
 	background_color: 0, 0.413, 0.586
@@ -45,6 +51,8 @@
         Line:
             width: 2
             rectangle: self.x, self.y, self.width, self.height
+
+
 <MenuIconButton@MDIconButton>:
     background_normal: 'assets/fallback.png'
 	background_color: 0, 0.413, 0.586
@@ -54,7 +62,6 @@
         Line:
             width: 2
             rectangle: self.x, self.y, self.width, self.height
-
 
 
 <PortraitScreen@MDScreen>:
@@ -78,19 +85,13 @@
         height: "30dp"
         halign: 'center'
 
-<BackgroundContainer>
-	canvas.before:
-	    Color:
-	        rgb: 0, 0.213, 0.286
-	    Rectangle:
-	        pos: self.pos
-	        size: self.size
 
 <LoginField@MDTextFieldRound>
     normal_color: utils.get_color_from_hex("e7e7e7")
     pos_hint: {"center_x": .5, "center_y": .5}
     write_tab: False
     multiline: False
+
 
 <ContactName>
     size_hint: (1 , 1)
@@ -99,6 +100,7 @@
     Image:
         source: 'Assets/logo.png'
         pos: self.parent.pos
+
 
 <FriendPopup@ModalView>:
     size_hint: (None, None)
@@ -160,6 +162,7 @@
                 font_name: 'Assets/Segoe UI'
                 on_press:
                     self.parent.parent.parent.dismiss()
+
 
 ScreenManager:
 	transition: SlideTransition(direction="up")
