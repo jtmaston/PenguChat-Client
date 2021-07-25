@@ -5,7 +5,5 @@ bcrypt
 kivy[base]~=2.0.0
 pycryptodome
 appdirs~=1.4.4
-matplotlib<3.3.0
-numpy
 PyAudio~=0.2.11
 kivymd~=0.104.2

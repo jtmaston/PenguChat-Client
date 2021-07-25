@@ -4,21 +4,18 @@
 import os
 import time
 from base64 import b64decode, b64encode
-from math import floor
 from os import makedirs
 from os.path import basename
+from pickle import dumps as p_dumps
+from pickle import loads as p_loads
 from socket import socket
-from subprocess import call
-from sys import platform, path
+from sys import platform
 
 import pyaudio
 from Crypto.Cipher import AES
 from appdirs import user_data_dir
 
 from DBHandler import get_common_key, save_message
-
-from pickle import loads as p_loads
-from pickle import dumps as p_dumps
 
 data_directory = user_data_dir("PenguChat")
 
@@ -56,13 +53,13 @@ def receiver_daemon(packet, queue):  # handles receiving data from the server
     # the actual name on disk
 
     file = open(f"{data_directory}/files/{packet['destination']}/{filename}", "wb+")
-    start = time.time()
+    # start = time.time()
     chunk = sock.recv(chunk_size)
     blob = b""
     while chunk:
         blob += chunk
         chunk = sock.recv(chunk_size)
-    end = time.time()
+    # end = time.time()
     # print(f"Transfer rate is {floor(len(blob) / 1000000 / (end - start + 0.01) * 8)} mbps")
     # ↑ used this a lot during testing. kinda accurate? eyeballing it and ifstat seems to make it ok-ish.
     # your mileage may vary.
@@ -189,5 +186,5 @@ def voip_listener_daemon(sock, application):  # Used with VoIP. This is a stub. 
     return
 
 
-def voip_speaker_daemon():  # yeah.
-    sock = socket()
+# def voip_speaker_daemon():  # yeah.
+    # sock = socket()

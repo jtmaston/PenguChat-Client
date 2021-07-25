@@ -1,4 +1,3 @@
-import sys
 from multiprocessing import Queue
 
 if __name__ == '__main__':  # While this *may* be considered ugly, spawning multiprocessing processes with kivy
@@ -26,7 +25,6 @@ if __name__ == '__main__':  # While this *may* be considered ugly, spawning mult
 
     from kivy.core.window import Window as KVWindow
     from kivy.uix.screenmanager import FadeTransition
-    from kivymd.uix.banner import MDBanner
     from kivy.core.audio import SoundLoader
     from kivymd.app import MDApp
     from kivy.clock import Clock
@@ -71,7 +69,7 @@ if __name__ == '__main__':  # While this *may* be considered ugly, spawning mult
             if not reloading:  # When logging out, everything is reinitialized, except for the kivy stuff
                 super(PenguChatApp, self).__init__()
 
-            self.factory = None  # Governs the comms protocols
+            self.factory = None  # Governs the communications protocols
             self.calling = False  # This may be implemented in the future, for VoIP.
 
             self.window_size = (
@@ -85,7 +83,7 @@ if __name__ == '__main__':  # While this *may* be considered ugly, spawning mult
             self.username = None  # Username of the client
             self.destination = None  # His conversation partner ( changes based on tab )
             self.__private = None  # His private key, used for Diffie-Hellman
-            self.__server_key = None  # Commonkey for the E2E tunnel with the server
+            self.__server_key = None  # Common key for the E2E tunnel with the server
             self.sidebar_rows = dict()  # The buttons on the sidebar, mapped to their functions live here
             self.message_bubbles = []  # The message bubbles present in the chatroom
             self.contact_names = []  # Names of the contacts
@@ -95,8 +93,6 @@ if __name__ == '__main__':  # While this *may* be considered ugly, spawning mult
             self.daemons = []  # Holds the sender / receiver daemons
             self.wd_queue = Queue()  # Used to communicate with above daemons
             self.watchdog = Clock.schedule_interval(self.file_watchdog, 0.1)
-
-
 
         def build(self):
             super(PenguChatApp, self).build()
@@ -592,6 +588,7 @@ if __name__ == '__main__':  # While this *may* be considered ugly, spawning mult
             self.root.ids.passwd_r.error = False
             application.send_login_data()
 
+
     class Client(Protocol):  # defines the communications protocol
         def __init__(self):
             self.username = None
@@ -647,7 +644,7 @@ if __name__ == '__main__':  # While this *may* be considered ugly, spawning mult
             Logger.info(reason.value)
 
 
-    class ClientFactory(Factory):  # is used to handle the protocols. Mostly useful when running mulitple connections,
+    class ClientFactory(Factory):  # is used to handle the protocols. Mostly useful when running multiple connections,
         def __init__(self):  # so a bit overkill, but the functionality is a welcome addition.
             self.client = None
 

@@ -2,9 +2,9 @@
 
 from base64 import b64decode, b64encode
 from datetime import datetime
-from os import makedirs, environ
-from pickle import loads as p_loads
+from os import makedirs
 from pickle import dumps as p_dumps
+from pickle import loads as p_loads
 
 from Crypto.Cipher import AES
 from appdirs import user_data_dir
@@ -158,7 +158,7 @@ def delete_private_key(partner_name, username):
     db.commit()
 
 
-def get_friends(username):                  # get the contacts list of a user
+def get_friends(username):  # get the contacts list of a user
     query = Messages.select().where(
         (Messages.destination == username) |
         (Messages.sender == username)
@@ -169,7 +169,7 @@ def get_friends(username):                  # get the contacts list of a user
     )))
 
 
-def get_messages(partner, username, raw=False): # get the messages of a user
+def get_messages(partner, username, raw=False):  # get the messages of a user
     query = Messages.select().where(
         ((Messages.destination == partner) & (Messages.sender == username)) |
         ((Messages.sender == partner) & (Messages.destination == username)) &
@@ -210,16 +210,16 @@ def save_message(packet, username, filename=None):  # save a message to the data
     ).save()
 
 
-def add_request(packet):            # add a request to the database. This handles the case
-    try:                            # where a user gets a second request, by ignoring the subsequent ones.
-        key = Requests.get(Requests.sender == packet['sender'])
+def add_request(packet):  # add a request to the database. This handles the case
+    try:  # where a user gets a second request, by ignoring the subsequent ones.
+        Requests.get(Requests.sender == packet['sender'])
     except Requests.DoesNotExist:
         Requests(sender=packet['sender'],
                  public_key=str(packet['content']).encode(),
                  destination=packet['destination']).save()
 
 
-def delete_request(username):   # called when a request was either accepted or rejected
+def delete_request(username):  # called when a request was either accepted or rejected
     Requests.get(Requests.sender == username).delete_instance()
     db.commit()
 
@@ -237,7 +237,7 @@ def get_requests(username):
     return list(dict.fromkeys([i.sender for i in query if i.sender]))
 
 
-try:    # this runs first at first run of the client and sets up the appropriate files.
+try:  # this runs first at first run of the client and sets up the appropriate files.
     db.create_tables([CommonKeys, Messages, PrivateKeys, Requests])
 except OperationalError as t:
     # Logger.warning("DBHandler: Creating database file.")
