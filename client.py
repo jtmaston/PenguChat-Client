@@ -1,17 +1,21 @@
+import sys
+from multiprocessing import Queue
 
-if __name__ == '__main__':          # While this *may* be considered ugly, spawning multiprocessing processes with kivy
-                                    # stuff included creates an additional window. This should address that.
+if __name__ == '__main__':  # While this *may* be considered ugly, spawning multiprocessing processes with kivy
+    # stuff included creates an additional window. This should address that.
     import multiprocessing
     from os import environ, SEEK_END
     from os.path import basename
     from platform import platform
     from sys import modules
     from sys import stdout
+
     OS = platform()
     if OS[0:OS.find('-')] == 'Windows':  # use DirectX for Windows, prevents some issues when using RDP
         environ["KIVY_GL_BACKEND"] = "angle_sdl2"  # ( and is generally better for Win )
 
-    from kivy.config import Config              # must resize before importing window
+    from kivy.config import Config  # must resize before importing window
+
     Config.set('graphics', 'width', f'{500}')
     Config.set('graphics', 'height', f'{750}')
 
@@ -30,10 +34,12 @@ if __name__ == '__main__':          # While this *may* be considered ugly, spawn
     install_twisted_reactor()  # integrate twisted with kivy
 
     from tkinter import filedialog, Tk
+
     tkWindow = Tk()  # create a tkinter window, this is used for the native file dialogs
     tkWindow.withdraw()  # hide it for now
 
     from appdirs import user_data_dir
+
     data_directory = user_data_dir("PenguChat")
 
     from pickle import dumps as p_dumps
@@ -48,15 +54,19 @@ if __name__ == '__main__':          # While this *may* be considered ugly, spawn
     from twisted.python.log import startLogging
     from socket import socket, AF_INET, SOCK_STREAM
     from daemons import sender_daemon, receiver_daemon, voip_listener_daemon, server_address
+
     startLogging(stdout)
 
     running = True
 
+
     class PenguChatApp(MDApp):  # this is the main KV app
         _popup: Popup
 
-        def __init__(self):  # set the window params, as well as init some parameters
-            super(PenguChatApp, self).__init__()
+        def __init__(self, reloading=False):  # set the window params, as well as init some parameters
+            if not reloading:
+                super(PenguChatApp, self).__init__()
+            self.factory = None
 
             self.calling = False
             self.file_socket = socket()
@@ -72,7 +82,6 @@ if __name__ == '__main__':          # While this *may* be considered ugly, spawn
             self.username = None
             self.destination = None
             self.__private = None
-            self.factory = None
             self.__server_key = None
             self.sidebar_refs = dict()
             self.conversation_refs = []
@@ -83,8 +92,8 @@ if __name__ == '__main__':          # While this *may* be considered ugly, spawn
             self.sound_manager = None
             self.done_typing = False
             self.daemons = []
-            KVWindow.bind(on_key_down=self.down)
-            KVWindow.bind(on_key_up=self.up)
+            self.wd_queue = Queue()
+            self.watchdog = Clock.schedule_interval(self.file_watchdog, 0.1)
 
         def up(self, *args):
             key = args[2]
@@ -121,10 +130,11 @@ if __name__ == '__main__':          # While this *may* be considered ugly, spawn
             super(PenguChatApp, self).build()
             self.root.current = 'loading_screen'  # move to the loading screen
             self.factory = ClientFactory()
-            # self.root.ids.conversation.bind(minimum_height=self.root.ids.conversation.setter('height'))
             self.root.ids.requests_button.tab = 'F'
             self.icon = 'Assets/circle-cropped.png'
-            global server_address
+
+            KVWindow.bind(on_key_down=self.down)
+            KVWindow.bind(on_key_up=self.up)
 
             reactor.connectTCP(server_address, 8123, self.factory)  # connect to the server
             self.theme_cls.colors = dict(self.theme_cls.colors, **colors_hex)
@@ -189,7 +199,11 @@ if __name__ == '__main__':          # While this *may* be considered ugly, spawn
             self.stop()
             self.factory.client.transport.loseConnection()
             self.root.current = 'loading_screen'
-            self.init_chat_room()  # called to clear the chat room, in anticipation of a new one being loaded
+            self.factory.stopFactory()
+            self.watchdog.cancel()
+            # self.init_chat_room()  # called to clear the chat room, in anticipation of a new one being loaded
+            self.__init__(reloading=True)
+            self.build()
 
         def send_text(self):
             message_text = self.root.ids.message_content.text
@@ -216,6 +230,28 @@ if __name__ == '__main__':          # While this *may* be considered ugly, spawn
             self.root.ids.message_content.height = '40dp'
             # print(f" <- {dumps(packet).encode()}")
 
+        def file_watchdog(self, *args, **kwargs):
+            while not self.wd_queue.empty():
+                message = self.wd_queue.get()
+                if self.destination == message['sender']:
+                    filename = message['display_name']
+                    truncated = {
+                        'sender': message['sender'],
+                        'destination': message['destination'],
+                        'timestamp': message['timestamp'],
+                        'file_path': message['filename']
+                    }
+                    print(f"client: {truncated['file_path']}")
+                    if message['sender'] == self.username:
+                        e = ConversationElement(side='r', isfile=True, filename=filename, truncated=truncated)
+
+                    else:
+                        e = ConversationElement(side='l', isfile=True, filename=filename, truncated=truncated)
+
+                    self.root.ids.conversation.rows += 1
+                    self.root.ids.conversation.add_widget(e.line)
+                    self.conversation_refs.append(e)
+
         def send_file(self):
             file = filedialog.askopenfile(mode="rb")
             tkWindow.update()
@@ -237,10 +273,6 @@ if __name__ == '__main__':          # While this *may* be considered ugly, spawn
                 sock = socket()
                 sock.bind(("0.0.0.0", 0))
                 sock.listen()
-                p = multiprocessing.Process(target=sender_daemon,
-                                            args=(file.name, file_size, self.destination, self.username, sock))
-                self.daemons.append(p)
-                p.start()
 
                 packet = {  # metadata
                     'sender': self.username,
@@ -251,6 +283,13 @@ if __name__ == '__main__':          # While this *may* be considered ugly, spawn
                     'filename': out_filename,
                     'port': sock.getsockname()[1]
                 }
+
+                p = multiprocessing.Process(target=sender_daemon,
+                                            args=(
+                                                file.name, self.wd_queue, self.destination, self.username, sock,
+                                                packet))
+                self.daemons.append(p)
+                p.start()
 
                 self.factory.client.transport.write((dumps(packet) + '\r\n').encode())
 
@@ -450,6 +489,7 @@ if __name__ == '__main__':          # While this *may* be considered ugly, spawn
                 self.conversation_refs.clear()
             self.root.ids.message_content.hidden = False
             self.root.ids.message_content.height = '40dp'
+            self.root.ids.right_bar.width = '50dp'
             messages = get_messages(partner, self.username)  # call the database to get the messages
             for i in messages:  # decrypt every message and then display it
                 self.add_bubble_to_conversation(i, partner)
@@ -457,26 +497,30 @@ if __name__ == '__main__':          # While this *may* be considered ugly, spawn
         def add_bubble_to_conversation(self, message, partner):
             cipher = AES.new(get_common_key(partner, self.username), AES.MODE_SIV)
             if not message.isfile:
-                encrypted = p_loads(b64decode(message.message_data))
                 try:
-                    message.message_data = cipher.decrypt_and_verify(encrypted[0], encrypted[1]).decode()
-                except ValueError:
-                    Logger.error(f"Application: MAC error on message id {message.id}")
-                    message.message_data = "[Message decryption failed. Most likely the key has changed]"
+                    encrypted = p_loads(b64decode(message.message_data))
+                except EOFError:
+                    Logger.error(f"Application: Message {message.id} is corrupted")
+                    message.message_data = "[Message appears corrupted.]"
+                else:
+                    try:
+                        message.message_data = cipher.decrypt_and_verify(encrypted[0], encrypted[1]).decode()
+                    except ValueError:
+                        Logger.error(f"Application: MAC error on message id {message.id}")
+                        message.message_data = "[Message decryption failed. Most likely the key has changed]"
+
                 finally:
                     if message.sender == self.username:
                         e = ConversationElement(side='r', isfile=False, text=message.message_data)
                     else:
                         e = ConversationElement(side='l', isfile=False, text=message.message_data)
             else:
-                filename = get_filename(message.sender,
-                                        message.destination,
-                                        message.timestamp
-                                        )
+                filename = message.message_data.decode()
                 truncated = {
                     'sender': message.sender,
                     'destination': message.destination,
-                    'timestamp': message.timestamp
+                    'timestamp': message.timestamp,
+                    'file_path': message.filename
                 }
                 if message.sender == self.username:
                     e = ConversationElement(side='r', isfile=True, filename=filename, truncated=truncated)
@@ -550,6 +594,7 @@ if __name__ == '__main__':          # While this *may* be considered ugly, spawn
 
         def init_chat_room(self):  # called upon first entering the chatroom
             self.root.ids.message_content.hidden = True
+            self.root.ids.right_bar.width = '0dp'
             self.set_sidebar_to_request_list()
             self.set_sidebar_to_friend_list()
             self.root.ids.conversation.clear_widgets()
@@ -570,7 +615,7 @@ if __name__ == '__main__':          # While this *may* be considered ugly, spawn
                     try:
                         screen.network_error
                     except AttributeError:
-                        error = ColoredLabel(color='red')
+                        error = ColoredLabel(label_color='red')
                         error.size_hint_y = 0.2
                         error.text = "Cannot connect!"
                         for i in screen.children[0].children:
@@ -625,8 +670,8 @@ if __name__ == '__main__':          # While this *may* be considered ugly, spawn
                         f.sender = command['sender']
                         application.add_bubble_to_conversation(f, command['sender'])
                     elif command['command'] == 'prepare_for_file':
-                        p = multiprocessing.Process(target=receiver_daemon, args=(command,))
-                        self.daemons.append(p)
+                        p = multiprocessing.Process(target=receiver_daemon, args=(command, application.wd_queue,))
+                        application.daemons.append(p)
                         p.start()
                     elif command['command'] == 'call':
                         application.root.current = 'call_incoming'
@@ -675,4 +720,3 @@ if __name__ == '__main__':
      if hasattr(sys, '_MEIPASS'):
         resource_add_path(os.path.join(sys._MEIPASS))
      """
-

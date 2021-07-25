@@ -559,9 +559,11 @@ ScreenManager:
 
 
             BoxLayout:
+                id: right_bar
                 orientation: 'vertical'
-                size_hint: (0.05, 1)
-                padding: ('10dp', 0, 0, '17dp')
+                size_hint: (None, 1)
+                width: '40dp'
+                padding: ('10dp', 0, '30dp', '17dp')
                 MDIconButton:
                     icon: 'logout'
                     on_press:

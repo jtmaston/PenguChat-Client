@@ -1,5 +1,7 @@
+import os
 from abc import ABC
 from os import environ
+from sys import platform
 
 from appdirs import user_data_dir
 from kivy.uix.image import Image
@@ -7,7 +9,7 @@ from kivy.uix.modalview import ModalView
 from kivy.uix.popup import Popup
 from kivy.uix.textinput import TextInput
 from kivy.utils import get_color_from_hex
-from kivymd.uix.button import MDTextButton
+from kivymd.uix.button import MDTextButton, MDFlatButton
 
 path = user_data_dir("PenguChat")
 environ['KIVY_NO_ENV_CONFIG'] = '1'
@@ -15,7 +17,7 @@ environ["KCFG_KIVY_LOG_LEVEL"] = "error"
 environ["KCFG_KIVY_LOG_DIR"] = path + '/PenguChat/Logs'
 
 from base64 import b64decode
-from tkinter.filedialog import SaveAs, asksaveasfile
+from tkinter.filedialog import SaveAs, asksaveasfile, asksaveasfilename
 
 from Crypto.Cipher import AES
 from kivy import Logger, LOG_LEVELS
@@ -54,10 +56,6 @@ for color in colors_hex:
 # TODO: 4k scales like pure trash
 
 # '#%02x%02x%02x' % (0, 128, 64)     Formula to get hex outta rgb. Here for legacy support
-
-class MenuButton(Button):
-    pass
-
 
 class BackgroundContainer(BoxLayout):
     pass
@@ -99,11 +97,12 @@ class EmptyWidget(Widget):
 
 
 class ColoredLabel(Label):
-    def __init__(self, color='gray', **kwargs):
+    def __init__(self, label_color='gray', **kwargs):
         super(ColoredLabel, self).__init__(**kwargs)
+        self.font_name = 'Assets/Segoe UI'
         with self.canvas.before:
             self.background_color = Color()
-            self.background_color.rgb = colors_rgb[color]
+            self.background_color.rgb = colors_rgb[label_color]
             self.rect = Rectangle(pos=self.pos, size=self.size)
         self.bind(pos=self.update_rect, size=self.update_rect)
 
@@ -171,18 +170,24 @@ class FileBubble(Button):
         self.parent.height = self.height
 
     def callback(self, *args, **kwargs):
-        cipher = AES.new(get_common_key(self.truncated['destination'], self.truncated['sender']), AES.MODE_SIV)
-        buffered = get_file_for_message(self.truncated['sender'],
-                                        self.truncated['destination'],
-                                        self.truncated['timestamp']
-                                        )
-        encrypted = p_loads(b64decode(buffered))
-        data = p_loads(cipher.decrypt_and_verify(encrypted[0], encrypted[1]))
-        f = asksaveasfile(mode='wb+', initialfile=data['filename'])
-        if f is None:
+
+        f = asksaveasfilename(initialfile=self.text.strip())
+
+        if f is None or f == "":
+            # os.remove(f.name)  Done: this was dangerous. Let's think of a better way. | discovered function above
             return
-        f.write(data['file_blob'])
-        f.close()
+        print(f"UIElements: {self.truncated}")
+        if platform.startswith("win"):
+            cmd = "copy " + \
+                  f'"{self.truncated["file_path"]} "'.replace('/', '\\') + \
+                  f' "{f}"'.replace('/', '\\')
+        else:
+            cmd = ['cp',
+                   f'"{self.truncated["file_path"]}"',
+                   f'" {f}"'
+                   ]
+        print(cmd)
+        os.system(cmd)
 
 
 class SidebarElement:
@@ -191,10 +196,9 @@ class SidebarElement:
         self.container.username = username
         self.yes_no_container = BoxLayout(orientation='vertical')
 
-        self.name = ColoredLabel(text=username, color='menu_light_blue')
-
-        self.accept = MenuButton(text='Accept')
-        self.decline = MenuButton(text='Decline')
+        self.name = ColoredLabel(text=username, label_color='beak_orange')
+        self.accept = Button(text='Accept', background_color=colors_rgb['beak_orange'], background_normal="")
+        self.decline = Button(text='Decline', background_color=colors_rgb['beak_orange'], background_normal="")
         self.yes_no_container.add_widget(self.accept)
         self.yes_no_container.add_widget(self.decline)
         self.container.add_widget(self.name)
