@@ -45,8 +45,8 @@ for color in colors_hex:
 
 # '#%02x%02x%02x' % (0, 128, 64)     Formula to get hex outta rgb. Here for legacy support
 
-class FriendPopup(ModalView):   # these empty of kinda empty classes are defined in the .kv file. They're here for the
-    pass                        # python interpreter
+class FriendPopup(ModalView):  # these empty of kinda empty classes are defined in the .kv file. They're here for the
+    pass  # python interpreter
 
 
 class HiddenTextInput(TextInput):
@@ -93,6 +93,7 @@ class ColoredLabel(Label):
     def update_rect(self, value, new_position):
         self.rect.pos = self.pos
         self.rect.size = self.size
+
 
 # Everything here is kinda insane. It does make sense, somehow.
 
