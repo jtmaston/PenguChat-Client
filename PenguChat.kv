@@ -539,15 +539,10 @@ ScreenManager:
                             rows: 0
                             spacing: 0, 10
                             padding: 0, 10
-
-                HiddenTextInput:
-                    id: message_content
-                    font_size: '20dp'
-                    background_color: 0,0,0,0
+                BoxLayout:
+                    id: text_box
                     size_hint: (1, None)
-                    pos_hint: {"center_x": .5, "center_y": .5}
-                    height: '0dp' if (self.hidden) else ('20dp' if( self.minimum_height == 0 ) else (self.minimum_height if self.minimum_height < 100 else 100))
-                    multiline: True
+                    height: root.ids.message_content.height
                     canvas.before:
                         Color:
                             rgba: 1, 1, 1, 1
@@ -555,9 +550,16 @@ ScreenManager:
                             pos: self.pos
                             size: self.size
                             radius: [(10, 10), (10, 10), (10, 10), (10, 10)]
-
-                        Color:
-                            rgb: C('#000000')
+                    HiddenTextInput:
+                        id: message_content
+                        font_size: '20dp'
+                        size_hint: (1, None)
+                        background_color: 0,0,0,0
+                        multiline: True
+                        height: '0dp' if (self.hidden) else ('20dp' if( self.minimum_height == 0 ) else (self.minimum_height if self.minimum_height < 100 else 100))
+                        canvas.before:
+                            Color:
+                                rgb: C('#000000')
 
 
 
