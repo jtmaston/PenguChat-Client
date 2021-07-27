@@ -19,9 +19,7 @@ from DBHandler import get_common_key, save_message
 
 data_directory = user_data_dir("PenguChat")
 
-server_address = 'penguserver'  # REMEMBER, FOR DEMO CHANGE TO LOCALHOST | note: I have bad memory. At home, the server
-
-
+server_address = 'localhost'  # REMEMBER, FOR DEMO CHANGE TO LOCALHOST | note: I have bad memory. At home, the server
 # runs remotely ( to simulate real life use ).  Someone else needs to run it on localhost.
 
 
