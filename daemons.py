@@ -109,7 +109,9 @@ def sender_daemon(file_path, queue, destination, username, sock, packet):  # thi
     client_socket.sendall(blob)
     # sendall seems to be magical. on windows, it's not even blocking. Can't measure its speed. I tried and got
     # about 14000mbps.
-
+    #print(client_socket.getpeername())
+    #print(client_socket.recv(20))
+    print("done")
     client_socket.close()
     sock.close()
 

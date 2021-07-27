@@ -42,27 +42,6 @@
             pos: self.pos
 
 
-<MenuButton>:
-    background_normal: 'assets/fallback.png'
-	background_color: 0, 0.413, 0.586
-	canvas.before:
-        Color:
-            rgb: 0, 0.213, 0.286
-        Line:
-            width: 2
-            rectangle: self.x, self.y, self.width, self.height
-
-
-<MenuIconButton@MDIconButton>:
-    background_normal: 'assets/fallback.png'
-	background_color: 0, 0.413, 0.586
-	canvas.before:
-        Color:
-            rgb: 0, 0.213, 0.286
-        Line:
-            width: 2
-            rectangle: self.x, self.y, self.width, self.height
-
 
 <PortraitScreen@MDScreen>:
     md_bg_color: utils.get_color_from_hex('#ff9f1e')
@@ -98,7 +77,7 @@
     halign: 'center'
     valign: 'center'
     Image:
-        source: 'Assets/logo.png'
+        source: 'Assets/Logo.png'
         pos: self.parent.pos
 
 
@@ -297,7 +276,7 @@ ScreenManager:
                     width: '2dp'
                 MDTextButton:
                     text: 'Sign up'
-                    font_name: 'Assets/Segoe UI BOLD'
+                    font_name: 'Assets/Segoe UI Bold'
                     size_hint: (.5, 1)
                     halign: 'center'
                     disabled: True
