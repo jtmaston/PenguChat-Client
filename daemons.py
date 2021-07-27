@@ -185,6 +185,5 @@ def voip_listener_daemon(sock, application):  # Used with VoIP. This is a stub. 
             return
     return
 
-
 # def voip_speaker_daemon():  # yeah.
-    # sock = socket()
+# sock = socket()

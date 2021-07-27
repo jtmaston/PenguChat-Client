@@ -201,8 +201,6 @@ if __name__ == '__main__':  # While this *may* be considered ugly, spawning mult
                 self.pwd = self.root.ids.loginPass.text.strip()  # get username and password from the UI element
             if self.username is None or self.username == "":
                 self.username = self.root.ids.loginUsr.text.strip()
-            print(self.pwd)
-            print(self.username)
             try:  # this block is necessary to make sure that an E2E tunnel exists to the server
                 cipher = AES.new(str(self.__server_key).encode(), AES.MODE_SIV)
             except AttributeError:  # if not, connection should be reset in order to get one
@@ -223,7 +221,6 @@ if __name__ == '__main__':  # While this *may* be considered ugly, spawning mult
             # because of how twisted works, data sent to the server *has* to be serialized, thus b64 is used.
 
         def send_sign_up_data(self):  # see above method, it's that but with extra steps
-            print('called')
             pwd = self.root.ids.passwd.text.strip()  # get the details from the UI element
             pwd_r = self.root.ids.passwd_r.text.strip()
 

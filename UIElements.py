@@ -163,7 +163,6 @@ class FileBubble(Button):
         if f is None or f == "":
             # os.remove(f.name)  Done: this was dangerous. Let's think of a better way. | discovered function above
             return
-        print(f"UIElements: {self.truncated}")
         if platform.startswith("win"):
             cmd = "copy " + \
                   f'"{self.truncated["file_path"]} "'.replace('/', '\\') + \
@@ -173,7 +172,6 @@ class FileBubble(Button):
                    f'"{self.truncated["file_path"]}"',
                    f'" {f}"'
                    ]
-        print(cmd)
         os.system(cmd)
 
 
