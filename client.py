@@ -365,8 +365,7 @@ if __name__ == '__main__':  # While this *may* be considered ugly, spawning mult
         def file_watchdog(self, *args, **kwargs):  # watches to see if files have arrived or departed, to add
             while not self.wd_queue.empty():  # the corresponding bubbles to the conversation
                 message = self.wd_queue.get()
-                if self.destination == message['sender']:
-                    self.load_messages(self.destination)
+                self.load_messages(message['destination'])
 
         def add_bubble_to_conversation(self, message, partner):  # add the message bubble
             cipher = AES.new(get_common_key(partner, self.username), AES.MODE_SIV)
