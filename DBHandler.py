@@ -59,9 +59,7 @@ class Requests(Model):
 
 
 def add_common_key(partner_name, common_key, added_by):  # add a common key to the database
-    try:
-        query = CommonKeys.get(CommonKeys.partner_name == partner_name)
-    except CommonKeys.DoesNotExist:
+    def add():
         new_key = CommonKeys(
             partner_name=partner_name,
             common_key=common_key,
@@ -78,6 +76,10 @@ def add_common_key(partner_name, common_key, added_by):  # add a common key to t
             'isfile': False
         }
         save_message(start_message, added_by)
+    try:
+        query = CommonKeys.get(CommonKeys.partner_name == partner_name)
+    except CommonKeys.DoesNotExist:
+        add()
     else:
         query.partner_name = partner_name
         query.common_key = common_key
@@ -85,7 +87,10 @@ def add_common_key(partner_name, common_key, added_by):  # add a common key to t
         query.key_updated = datetime.now()
 
         # ok, this is exciting. This ↓ handles re-encryption of all the messages after a key change
-        old_key = get_common_key(partner_name, added_by)
+        try:
+            old_key = get_common_key(partner_name, added_by)
+        except DoesNotExist:
+            add()
         messages = get_messages(partner_name, added_by, raw=True)
         for message in messages:
             cipher = AES.new(old_key, AES.MODE_SIV)

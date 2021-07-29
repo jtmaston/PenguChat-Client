@@ -365,7 +365,7 @@ if __name__ == '__main__':  # While this *may* be considered ugly, spawning mult
         def file_watchdog(self, *args, **kwargs):  # watches to see if files have arrived or departed, to add
             while not self.wd_queue.empty():  # the corresponding bubbles to the conversation
                 message = self.wd_queue.get()
-                self.load_messages(message['destination'])
+                self.show_message_box()
 
         def add_bubble_to_conversation(self, message, partner):  # add the message bubble
             cipher = AES.new(get_common_key(partner, self.username), AES.MODE_SIV)
@@ -541,8 +541,9 @@ if __name__ == '__main__':  # While this *may* be considered ugly, spawning mult
 
         """Widget methods"""
 
-        def show_message_box(self, button_object):  # called when selecting a contact from the sidebar,
-            self.destination = button_object.text  # loads the data for it.
+        def show_message_box(self, button_object=None):  # called when selecting a contact from the sidebar,
+            if button_object is not None:
+                self.destination = button_object.text  # loads the data for it.
             self.set_sidebar_to_friend_list()
             self.load_messages(self.destination)
 

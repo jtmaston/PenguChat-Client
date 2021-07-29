@@ -323,6 +323,8 @@ ScreenManager:
                     size_hint: (None, 0.15)
                     md_bg_color: utils.get_color_from_hex('#ff9f1e')
                     pos_hint: {'center_x': .5, 'center_y': .5}
+                    on_press:
+                        app.send_sign_up_data()
 
 		        Widget:
                     size_hint: (1, 0.25)
